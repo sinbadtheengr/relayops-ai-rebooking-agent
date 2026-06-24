@@ -1,0 +1,49 @@
+{
+  "display_information": {
+    "name": "RelayOps AI",
+    "description": "Recover rebooking revenue from overdue customers.",
+    "background_color": "#163B3A"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "RelayOps",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/relayops",
+        "description": "Run rebooking scan or ask RelayOps a question",
+        "usage_hint": "scan | Which VIP customers are overdue?",
+        "should_escape": false,
+        "url": "https://example.ngrok-free.app/slack/events"
+      }
+    ]
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "assistant:write",
+        "chat:write",
+        "commands",
+        "im:history",
+        "im:read",
+        "im:write",
+        "reactions:write"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": ["app_mention", "assistant_thread_started", "message.im"],
+      "request_url": "https://example.ngrok-free.app/slack/events"
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://example.ngrok-free.app/slack/events"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": true,
+    "token_rotation_enabled": false
+  }
+}
