@@ -124,34 +124,36 @@ app.event("assistant_thread_started" as never, async ({ client, event, logger }:
   }
 });
 
-app.action("draft_customer", async ({ ack, body, client }) => {
+app.action("draft_customer", async ({ ack, body, respond, logger }) => {
   await ack();
   const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
-  const channel = (body as { channel?: { id: string } }).channel?.id;
-  const user = (body as { user?: { id: string } }).user?.id;
-  if (!action?.value || !channel || !user) return;
+  if (!action?.value) return;
 
-  await client.chat.postEphemeral({
-    channel,
-    user,
-    text: "RelayOps outreach draft",
-    blocks: outreachDraftBlocks(action.value)
-  });
+  try {
+    await respond({
+      response_type: "ephemeral",
+      text: "RelayOps outreach draft",
+      blocks: outreachDraftBlocks(action.value)
+    } as never);
+  } catch (error) {
+    logger.error(error);
+  }
 });
 
-app.action("mark_contacted", async ({ ack, body, client }) => {
+app.action("mark_contacted", async ({ ack, body, respond, logger }) => {
   await ack();
   const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
-  const channel = (body as { channel?: { id: string } }).channel?.id;
-  const user = (body as { user?: { id: string } }).user?.id;
-  if (!action?.value || !channel || !user) return;
+  if (!action?.value) return;
 
-  const customer = markCustomerContacted(action.value, "Contacted from Slack action");
-  await client.chat.postEphemeral({
-    channel,
-    user,
-    text: `${customer.fullName} was marked as contacted.`
-  });
+  try {
+    const customer = markCustomerContacted(action.value, "Contacted from Slack action");
+    await respond({
+      response_type: "ephemeral",
+      text: `${customer.fullName} was marked as contacted.`
+    } as never);
+  } catch (error) {
+    logger.error(error);
+  }
 });
 
 scheduleDailyScan(app);
