@@ -56,9 +56,10 @@ app.command("/relayops", async ({ command, ack, respond }) => {
 
   if (!text || text === "scan") {
     await respond({
+      response_type: "in_channel",
       text: "RelayOps Daily Rebooking Scan",
       blocks: dailySummaryBlocks(getDailySummary())
-    });
+    } as never);
     return;
   }
 
@@ -155,5 +156,6 @@ app.action("mark_contacted", async ({ ack, body, client }) => {
 
 scheduleDailyScan(app);
 
+console.log("Starting RelayOps AI Rebooking Agent in Slack socket mode...");
 await app.start();
 console.log("RelayOps AI Rebooking Agent is running in Slack socket mode.");
