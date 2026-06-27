@@ -47,6 +47,35 @@ RelayOps answers those questions inside the tool staff already use.
 - SQLite via `better-sqlite3`
 - `node-cron` for scheduled scans
 
+## UiPath AgentHack Alignment
+
+RelayOps is submitted for **Track 2: UiPath Maestro BPMN** because the core workflow is a repeatable business process: scan customer records, score rebooking opportunities, route staff actions, log outcomes, and repeat.
+
+Current working MVP:
+
+- External coded Slack agent built with TypeScript, Node.js, and Slack Bolt
+- SQLite-backed CRM and appointment data simulation
+- OpenAI-compatible function calling with deterministic fallback
+- Slack human-in-the-loop actions for draft review and contact logging
+
+UiPath component target:
+
+- **UiPath Maestro BPMN** should orchestrate the end-to-end process in UiPath Automation Cloud.
+- The RelayOps Slack agent can be treated as an external coded agent/API participant in that process.
+- Human review and staff follow-up steps map naturally to Maestro human tasks.
+- Booking/CRM import, scoring, Slack notification, and contact logging can be modeled as BPMN service tasks and decision gateways.
+
+Agent type:
+
+- **Coded agent**: the current MVP is a coded external Slack agent.
+- **Low-code orchestration target**: the intended UiPath layer is Maestro BPMN in Automation Cloud.
+
+Important submission note: the repository demonstrates the functioning coded agent and BPMN-ready architecture. For full challenge compliance, the final submission should also include a UiPath Automation Cloud / Maestro environment URL or exported Maestro BPMN process showing UiPath as the orchestration layer.
+
+## Coding Agent Usage
+
+This project was built with Codex as an AI-assisted coding agent. Codex helped scaffold the TypeScript Slack app, generate the SQLite demo dataset, implement scoring and fallback logic, create documentation, produce the pitch deck, and debug the Slack interaction flow. The generated code is meaningfully integrated into the working MVP rather than referenced only as documentation.
+
 ## Quick Start
 
 ```bash
@@ -150,4 +179,3 @@ docs/
 - Demo script: `docs/demo-script.md`
 - Pitch deck outline: `docs/pitch-deck-outline.md`
 - 2-minute demo video script: `docs/video-script.md`
-
