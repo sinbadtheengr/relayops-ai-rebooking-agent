@@ -4,7 +4,12 @@ import { createOutreachDraft, getDailySummary, getOpportunities } from "./relayo
 import { formatCurrency, formatDate } from "./utils.js";
 import type { CustomerInsight, Priority } from "./types.js";
 
-const openai = config.openAiApiKey ? new OpenAI({ apiKey: config.openAiApiKey }) : null;
+function hasUsableOpenAiKey(apiKey: string | undefined): apiKey is string {
+  const key = apiKey?.trim();
+  return Boolean(key && key.length > 20 && key.startsWith("sk-") && !key.toLowerCase().includes("your"));
+}
+
+const openai = hasUsableOpenAiKey(config.openAiApiKey) ? new OpenAI({ apiKey: config.openAiApiKey }) : null;
 
 function customerLine(customer: CustomerInsight): string {
   return `*${customer.fullName}* (${customer.priority}, score ${customer.priorityScore}) - last visit ${customer.daysSinceLastVisit} days ago, ${customer.daysOverdue} days overdue, likely ${Math.round(
@@ -128,46 +133,50 @@ function runTool(name: string, rawArgs: string | undefined): unknown {
 export async function answerBusinessQuestion(question: string): Promise<string> {
   if (!openai) return parseDeterministicIntent(question);
 
-  const first = await openai.chat.completions.create({
-    model: config.openAiModel,
-    temperature: 0.2,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are RelayOps, a Slack-native AI rebooking employee for small businesses. Use tools for all customer facts. Be concise, operational, and ROI-focused. Never invent customers."
-      },
-      { role: "user", content: question }
-    ],
-    tools,
-    tool_choice: "auto"
-  });
+  try {
+    const first = await openai.chat.completions.create({
+      model: config.openAiModel,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are RelayOps, a Slack-native AI rebooking employee for small businesses. Use tools for all customer facts. Be concise, operational, and ROI-focused. Never invent customers."
+        },
+        { role: "user", content: question }
+      ],
+      tools,
+      tool_choice: "auto"
+    });
 
-  const message = first.choices[0]?.message;
-  const toolCalls = message?.tool_calls ?? [];
-  if (toolCalls.length === 0) return message?.content ?? parseDeterministicIntent(question);
+    const message = first.choices[0]?.message;
+    const toolCalls = message?.tool_calls ?? [];
+    if (toolCalls.length === 0) return message?.content ?? parseDeterministicIntent(question);
 
-  const toolMessages: OpenAI.Chat.Completions.ChatCompletionToolMessageParam[] = toolCalls.map((call) => ({
-    role: "tool",
-    tool_call_id: call.id,
-    content: JSON.stringify(runTool(call.function.name, call.function.arguments))
-  }));
+    const toolMessages: OpenAI.Chat.Completions.ChatCompletionToolMessageParam[] = toolCalls.map((call) => ({
+      role: "tool",
+      tool_call_id: call.id,
+      content: JSON.stringify(runTool(call.function.name, call.function.arguments))
+    }));
 
-  const final = await openai.chat.completions.create({
-    model: config.openAiModel,
-    temperature: 0.25,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Format the Slack response with short bullets. Include why customers were selected, best channel, likelihood, and revenue when relevant."
-      },
-      { role: "user", content: question },
-      message,
-      ...toolMessages
-    ]
-  });
+    const final = await openai.chat.completions.create({
+      model: config.openAiModel,
+      temperature: 0.25,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Format the Slack response with short bullets. Include why customers were selected, best channel, likelihood, and revenue when relevant."
+        },
+        { role: "user", content: question },
+        message,
+        ...toolMessages
+      ]
+    });
 
-  return final.choices[0]?.message.content ?? parseDeterministicIntent(question);
+    return final.choices[0]?.message.content ?? parseDeterministicIntent(question);
+  } catch {
+    console.warn("OpenAI request failed; using local RelayOps fallback response.");
+    return parseDeterministicIntent(question);
+  }
 }
-
