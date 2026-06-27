@@ -91,15 +91,20 @@ app.event("app_mention", async ({ event, say, client, sayStream, setStatus }) =>
   });
 });
 
-app.message(async ({ message, say, sayStream }) => {
-  const payload = message as { text?: string; channel_type?: string; bot_id?: string; thread_ts?: string; ts?: string };
-  if (payload.bot_id || payload.channel_type !== "im") return;
+app.message(async ({ message, say }) => {
+  const payload = message as {
+    text?: string;
+    channel_type?: string;
+    bot_id?: string;
+    app_id?: string;
+    subtype?: string;
+    user?: string;
+  };
+  if (payload.channel_type !== "im" || payload.bot_id || payload.app_id || payload.subtype || !payload.user) return;
 
   await respondToPrompt({
-    text: payload.text || "Which customers should we contact today?",
-    say: say as (message: { text: string; thread_ts?: string }) => Promise<unknown>,
-    threadTs: payload.thread_ts ?? payload.ts,
-    sayStream: sayStream as unknown as () => { append: (chunk: { markdown_text: string }) => Promise<void>; stop: () => Promise<void> }
+    text: payload.text?.trim() || "Which customers should we contact today?",
+    say: say as (message: { text: string; thread_ts?: string }) => Promise<unknown>
   });
 });
 
