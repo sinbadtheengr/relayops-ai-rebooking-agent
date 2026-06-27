@@ -33,6 +33,7 @@ For Slack:
 
 - RelayOps turns forgotten follow-up into a daily revenue workflow inside Slack.
 - The AI is not guessing: it uses structured function calls against CRM and appointment data.
+- The Slack experience is complete: slash command, app DM, channel mention, Block Kit report, and action buttons.
+- The product keeps humans in the loop by drafting outreach for review instead of auto-sending customer messages.
 - The product starts with CSV/SQLite and can grow into booking-system integrations and PostgreSQL.
 - The ROI is concrete: recovered appointments multiplied by average ticket value.
-

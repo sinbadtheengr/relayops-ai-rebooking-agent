@@ -47,34 +47,41 @@ RelayOps answers those questions inside the tool staff already use.
 - SQLite via `better-sqlite3`
 - `node-cron` for scheduled scans
 
-## UiPath AgentHack Alignment
+## Slack Agent Builder Challenge Alignment
 
-RelayOps is submitted for **Track 2: UiPath Maestro BPMN** because the core workflow is a repeatable business process: scan customer records, score rebooking opportunities, route staff actions, log outcomes, and repeat.
+RelayOps is built for the **Slack Agent Builder Challenge** as a Slack-native agent experience. The core product lives where staff already work: Slack channels, Slack DMs, slash commands, app mentions, Block Kit actions, and human-in-the-loop review.
 
-Current working MVP:
+Challenge fit:
 
-- External coded Slack agent built with TypeScript, Node.js, and Slack Bolt
-- SQLite-backed CRM and appointment data simulation
-- OpenAI-compatible function calling with deterministic fallback
-- Slack human-in-the-loop actions for draft review and contact logging
+- **New Slack agent**: RelayOps acts as an AI employee for rebooking and revenue recovery.
+- **Slack-first UX**: staff can use `/relayops scan`, DM the app, mention it in a channel, and click action buttons.
+- **Agentic workflow**: the agent retrieves structured customer data, scores opportunities, recommends next actions, and drafts outreach.
+- **Human-in-the-loop control**: RelayOps drafts messages for staff review instead of sending customer outreach automatically.
+- **Business impact**: the demo turns overlooked customer follow-up into a measurable daily revenue workflow.
 
-UiPath component target:
+Slack capabilities used:
 
-- **UiPath Maestro BPMN** should orchestrate the end-to-end process in UiPath Automation Cloud.
-- The RelayOps Slack agent can be treated as an external coded agent/API participant in that process.
-- Human review and staff follow-up steps map naturally to Maestro human tasks.
-- Booking/CRM import, scoring, Slack notification, and contact logging can be modeled as BPMN service tasks and decision gateways.
-
-Agent type:
-
-- **Coded agent**: the current MVP is a coded external Slack agent.
-- **Low-code orchestration target**: the intended UiPath layer is Maestro BPMN in Automation Cloud.
-
-Important submission note: the repository demonstrates the functioning coded agent and BPMN-ready architecture. For full challenge compliance, the final submission should also include a UiPath Automation Cloud / Maestro environment URL or exported Maestro BPMN process showing UiPath as the orchestration layer.
+- Slack app manifest
+- Slack Bolt for JavaScript
+- Socket Mode for local demo delivery
+- Slash command: `/relayops`
+- App mention handling
+- App Home / DM message handling
+- Block Kit reports and action buttons
+- Ephemeral staff-only draft responses
+- Suggested assistant prompts for common rebooking questions
 
 ## Coding Agent Usage
 
 This project was built with Codex as an AI-assisted coding agent. Codex helped scaffold the TypeScript Slack app, generate the SQLite demo dataset, implement scoring and fallback logic, create documentation, produce the pitch deck, and debug the Slack interaction flow. The generated code is meaningfully integrated into the working MVP rather than referenced only as documentation.
+
+## Judging Criteria Coverage
+
+- **Real business value**: estimates recoverable revenue from customers who are overdue for rebooking.
+- **Practical AI usage**: uses structured tools and scoring logic instead of generic chatbot responses.
+- **Slack experience**: works in channels, DMs, slash commands, app mentions, and Block Kit actions.
+- **Production readiness**: includes SQLite storage, clear PostgreSQL upgrade path, consent-aware channel recommendations, deterministic fallback, and setup docs.
+- **Demo readiness**: includes mock data, local scripts, Slack app manifest, pitch deck, demo script, and video script.
 
 ## Quick Start
 
