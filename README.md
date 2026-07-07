@@ -47,9 +47,9 @@ RelayOps answers those questions inside the tool staff already use.
 - SQLite via `better-sqlite3`
 - `node-cron` for scheduled scans
 
-## Slack Agent Builder Challenge Alignment
+## Slack Builder Challenge Hackathon Alignment
 
-RelayOps is built for the **Slack Agent Builder Challenge** as a Slack-native agent experience. The core product lives where staff already work: Slack channels, Slack DMs, slash commands, app mentions, Block Kit actions, and human-in-the-loop review.
+RelayOps is now built for the **Slack Builder Challenge Hackathon** as a Slack-native agent experience, and is no longer positioned for the UiPath Challenge. The core product lives where staff already work: Slack channels, Slack DMs, slash commands, app mentions, Block Kit actions, and human-in-the-loop review.
 
 Challenge fit:
 
