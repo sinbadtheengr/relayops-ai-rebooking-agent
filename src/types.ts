@@ -52,5 +52,7 @@ export interface DailySummary {
   estimatedRecoverableRevenueCents: number;
   topOpportunities: CustomerInsight[];
   recommendedActions: string[];
+  /** Customers suppressed from this scan because they were contacted within the cooldown window (G-01). */
+  recentlyContactedCount: number;
 }
 

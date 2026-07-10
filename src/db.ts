@@ -135,6 +135,14 @@ export function getCustomerRecord(customerId: string): CustomerRecord | undefine
   return listCustomerRecords().find((customer) => customer.id === customerId);
 }
 
+/** Customer ids logged as contacted at or after `sinceIso`. Used to suppress recently-contacted customers from scans (G-01). */
+export function getRecentlyContactedCustomerIds(sinceIso: string): Set<string> {
+  const rows = getDb()
+    .prepare(`SELECT DISTINCT customer_id FROM outreach_logs WHERE status = 'contacted' AND created_at >= ?`)
+    .all(sinceIso) as Array<{ customer_id: string }>;
+  return new Set(rows.map((row) => row.customer_id));
+}
+
 export function insertCustomer(customer: Customer): void {
   getDb()
     .prepare(

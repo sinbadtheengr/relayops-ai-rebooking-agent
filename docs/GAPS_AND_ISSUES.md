@@ -17,6 +17,7 @@
 ## Critical
 
 ### G-01 · Bug · "Mark contacted" has no effect on future reports
+- ✅ Fixed 2026-07-09 (Slack Challenge hardening): `getRecentlyContactedCustomerIds` in `db.ts`; `CONTACT_COOLDOWN_DAYS = 14` + `rankedWithSuppression` + `includeContacted` flag in `relayops.ts`; `recentlyContactedCount` added to `DailySummary` and surfaced in the report, App Home, and text summary. Covered by `test/relayops.test.ts` (suppression + cooldown expiry).
 - **Location:** `src/scoring.ts:40-48` (`rankOpportunities`), `src/db.ts:180-196` (`recordOutreach`), `src/relayops.ts:54-59`
 - **What happens:** The *Mark contacted* button writes a row to `outreach_logs`, but nothing ever reads that table. `rankOpportunities()` ranks purely from `customers` + `appointments`. The daily report itself tells staff to "log contacted customers so tomorrow's report focuses on fresh opportunities" (`src/scoring.ts:65`) — a promise the code does not keep.
 - **Failure scenario:** Staff marks Sarah Johnson contacted on Monday. Tuesday's scan shows Sarah as the #1 opportunity again. Staff contacts her twice; trust in the product dies; a real customer gets spammed.
@@ -39,24 +40,28 @@
 ## High
 
 ### G-02 · Bug · Scheduled scan can crash the process on a single Slack failure
+- ✅ Fixed 2026-07-09: cron callback body wrapped in try/catch, logs and swallows so the next run still fires.
 - **Location:** `src/scheduler.ts:11-21`
 - **What happens:** The `cron.schedule` callback awaits `chat.postMessage` with no try/catch. Any failure (revoked token, archived channel, `channel_not_found`, transient network) becomes an unhandled promise rejection — fatal by default on Node ≥ 20.
 - **Failure scenario:** The report channel is archived; at 08:00 the post fails and the whole Slack app exits. The business loses not just the report but the interactive agent, silently, until someone restarts it.
 - **Fix specification:** Wrap the callback body in `try { ... } catch (error) { console.error("Daily scan failed to post to Slack:", error); }`. Do not rethrow; the next scheduled run should still fire.
 
 ### G-03 · Bug · A failed emoji reaction aborts the entire app-mention response
+- ✅ Fixed 2026-07-09: `reactions.add` and `setStatus` each wrapped in their own try/catch; the answer no longer depends on decorations.
 - **Location:** `src/app.ts:73-79`
 - **What happens:** `client.reactions.add` is awaited before answering, outside any try/catch. It fails with `already_reacted` (user edits their mention, Slack redelivers), on deleted messages, and in any surface where reactions are disallowed. The thrown error skips `respondToPrompt`, so the user gets 👀-less silence — or nothing at all.
 - **Failure scenario:** Slack retries an event (it redelivers on any ack slower than 3s); second delivery throws `already_reacted`; the user's question never gets answered.
 - **Fix specification:** Wrap only the `reactions.add` call in `try { ... } catch { /* non-fatal */ }`. The reaction is decoration; the answer is the job. Apply the same principle to `setStatus`.
 
 ### G-04 · Bug · `npm start` is broken — compiled entry point path is wrong
+- ✅ Fixed 2026-07-09: `package.json` `start` now runs `node dist/src/app.js`.
 - **Location:** `package.json:11` vs `tsconfig.json:10-14`
 - **What happens:** `tsconfig.json` has `rootDir: "."` and includes both `src/` and `scripts/`, so `tsc` emits `dist/src/app.js` and `dist/scripts/*.js`. But the start script runs `node dist/app.js`, which does not exist. Verified: the existing `dist/` output contains `dist/src/app.js`.
 - **Failure scenario:** Anyone following the "production" path (`npm run build && npm start`) gets `ERR_MODULE_NOT_FOUND` immediately.
 - **Fix specification:** Change `package.json` `"start"` to `"node dist/src/app.js"`. (Alternative — `rootDir: "src"` — breaks compiling `scripts/`; don't.) Also note `"dev": "node --import tsx src/app.ts"` and `"dev:watch": "tsx watch src/app.ts"` are the supported dev paths; leave them.
 
 ### G-05 · Missing · Zero automated tests, no lint, no CI
+- ✅ Mostly fixed 2026-07-09/07-10: Vitest added (`npm test`), hermetic in-memory DB via `test/setup.ts`. Suite covers scoring components/bands + `daysOverdue===0` exclusion, `getOpportunities` filters, `createOutreachDraft` throw-on-unknown, G-01 suppression + cooldown expiry, and deterministic agent routing (19 tests). GitHub Actions CI runs `build + test` on push/PR (`.github/workflows/ci.yml`). Remaining: lint config.
 - **Location:** repository-wide; `package.json` has no `test` script
 - **What happens:** Scoring math, filters, the deterministic parser, and SQL queries have no regression protection. Every fix in this register lands unverified.
 - **Failure scenario:** A future change to `scoreCustomer` silently reorders priorities; the demo shows a Low-priority customer as #1; nobody notices until a live demo.
@@ -105,6 +110,7 @@
 - **Fix specification:** When building `outreachDraftBlocks`, persist the draft first via `recordOutreach(customer.id, channel, message, "drafted")` and put the generated log id (or the customer id + drafted flag) in the button `value`. On *Mark contacted*, update that log row's status to `"contacted"` (add `updateOutreachStatus(id, status)` in `db.ts`) rather than inserting a placeholder. If the click comes from the daily report (no prior draft), keep the current insert but with message `"Marked contacted from daily report"` and the acting user (S-01).
 
 ### G-09 · Bug · Button failures are invisible to the user
+- ✅ Fixed 2026-07-09: both action handlers now call `notifyStale(respond)` on error — an ephemeral "couldn't find that customer anymore, run /relayops scan" — itself guarded so a failed respond can't rethrow.
 - **Location:** `src/app.ts:132-162` (both `catch (error) { logger.error(error) }` blocks)
 - **What happens:** If `outreachDraftBlocks` throws (e.g. stale button referencing a re-seeded, now-nonexistent customer id) or `markCustomerContacted` throws, the error is logged server-side and the user sees a button that does nothing.
 - **Failure scenario:** `npm run seed` re-runs while an old report is still in a channel; every button on the old report silently no-ops.
@@ -146,6 +152,7 @@
 - A customer whose only visits were cancelled/no-show never appears anywhere. Defensible (no return cycle to measure) but undocumented and it hides no-show recovery — arguably the *most* valuable outreach segment. Decision for M2; documented as an edge case in `CLAUDE.md` §7.
 
 ### G-16 · Tech debt · View layer calls the service layer
+- ✅ Fixed 2026-07-09: `outreachDraftBlocks` now takes `{ customer, message }`; `app.ts` builds the draft via `createOutreachDraft` and passes it in. `slackBlocks.ts` no longer imports the service layer. New `homeDashboardBlocks` follows the same pure-function pattern.
 - **Location:** `src/slackBlocks.ts:3,87` — `outreachDraftBlocks` calls `createOutreachDraft`.
 - Blocks builders should be pure functions of data. Fix opportunistically (it must change anyway for G-08): have `app.ts` create the draft and pass `{ customer, message }` in.
 
@@ -173,7 +180,8 @@ Tracked here for completeness; scheduling lives in [`PROJECT_OVERVIEW.md` §7](P
 | MF-02 | Real data ingestion (CSV import → Square/Fresha connector) | M2 | Replaces `demoData.ts` for pilots; keep seeder for tests |
 | MF-03 | Outcome tracking (did they rebook?) feeding likelihood model | M2 | Join outreach_logs to subsequent appointments |
 | MF-04 | Opt-out / suppression list as hard gate | M2 | Pairs with S-03 |
-| MF-05 | App Home tab + report pagination (beyond top 5) | M2 | `home_tab_enabled` currently `false` in manifest |
+| MF-05 | App Home tab + report pagination (beyond top 5) | M2 | ✅ App Home tab shipped 2026-07-09 (`homeDashboardBlocks`, `app_home_opened`/`refresh_home` handlers, `home_tab_enabled: true`). Pagination beyond top 5 still pending. |
 | MF-06 | Audit log (who clicked what, which drafts were AI-generated) | M2/M3 | Extends S-01 fix |
 | MF-07 | Multi-tenant isolation + OAuth install flow | M3 | Socket Mode is single-workspace |
 | MF-08 | RAG over notes/playbooks/campaign history | M3 | Needs vector store; out of scope until M3 |
+| MF-09 | MCP server exposing the service layer | M1 | ✅ Shipped 2026-07-09 (`src/mcp/server.ts`, `scripts/mcp.ts`, `npm run mcp`). Five tools over stdio; satisfies the Slack Challenge required-tech. Human-in-the-loop preserved (no send tool). |

@@ -47,7 +47,7 @@ export function rankOpportunities(records: CustomerRecord[]): CustomerInsight[] 
     });
 }
 
-export function summarizeOpportunities(opportunities: CustomerInsight[]): DailySummary {
+export function summarizeOpportunities(opportunities: CustomerInsight[], recentlyContactedCount = 0): DailySummary {
   const high = opportunities.filter((customer) => customer.priority === "High").length;
   const medium = opportunities.filter((customer) => customer.priority === "Medium").length;
   const revenue = opportunities.reduce((sum, customer) => sum + customer.estimatedRecoverableRevenueCents, 0);
@@ -58,6 +58,7 @@ export function summarizeOpportunities(opportunities: CustomerInsight[]): DailyS
     highPriorityCount: high,
     mediumPriorityCount: medium,
     estimatedRecoverableRevenueCents: revenue,
+    recentlyContactedCount,
     topOpportunities: opportunities.slice(0, 10),
     recommendedActions: [
       `Start with the top ${Math.min(high || 3, 5)} high-priority customers before noon.`,

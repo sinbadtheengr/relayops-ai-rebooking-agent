@@ -20,20 +20,20 @@ For Slack:
 
 ## Live Demo Flow
 
-1. Open Slack and run `/relayops scan`.
-2. Show the daily report: overdue count, high-priority customers, and recoverable revenue.
-3. Click `Draft outreach` for a high-priority customer.
-4. Show the personalized message and explain that it uses customer history, service type, channel preference, and consent.
-5. Ask: `Who has not returned in 90 days?`
-6. Ask: `Show overdue VIP customers`
-7. Ask: `Summarize today's opportunities`
-8. Click `Mark contacted` and explain that future scans can avoid stale duplicate work.
+1. **Daily scan** — run `/relayops scan`. Show overdue count, high-priority customers, and recoverable revenue.
+2. **Grounded Q&A** — DM the app: `Who has not returned in 90 days?`, then `Show overdue VIP customers`. Point out every fact traces to booking data.
+3. **Draft outreach** — click `Draft outreach` on a high-priority customer. Show the personalized message using last service, channel preference, and consent.
+4. **Close the loop (the money beat)** — click `Mark contacted`. Re-run `/relayops scan` and show that customer is **gone** and the header notes "1 already contacted this cycle — suppressed." No double-contacting, no spammed customers.
+5. **App Home dashboard** — open the RelayOps App Home tab. Show live KPIs (recoverable revenue, overdue, high-priority, suppressed) and top opportunities with buttons.
+6. **MCP server** — in Claude Desktop (RelayOps configured as an MCP server), ask `Summarize today's RelayOps rebooking opportunities` and `Draft a follow-up for the most overdue VIP`. Same grounded intelligence, outside Slack.
+
+> All six steps run credential-free except the three Slack tokens — no OpenAI key required.
 
 ## Judge Talking Points
 
-- RelayOps turns forgotten follow-up into a daily revenue workflow inside Slack.
-- The AI is not guessing: it uses structured function calls against CRM and appointment data.
-- The Slack experience is complete: slash command, app DM, channel mention, Block Kit report, and action buttons.
-- The product keeps humans in the loop by drafting outreach for review instead of auto-sending customer messages.
-- The product starts with CSV/SQLite and can grow into booking-system integrations and PostgreSQL.
-- The ROI is concrete: recovered appointments multiplied by average ticket value.
+- **Required tech, done cleanly:** RelayOps ships an MCP server (and a Slack AI-app surface). The same domain core powers Slack and MCP.
+- **Not a guessing chatbot:** structured function calls against CRM/appointment data; deterministic fallback when no LLM key is set — every number is verifiable.
+- **Complete Slack experience:** slash command, App Home dashboard, DM, mention, Block Kit reports, action buttons, streaming, thinking status.
+- **The loop actually closes:** contacted customers are suppressed for a 14-day cooldown — the product keeps the promise its report makes.
+- **Human-in-the-loop by design:** drafts for review, never auto-sent customer messages — an invariant preserved even in the MCP tools.
+- **Concrete ROI and a real upgrade path:** recovered appointments × average ticket; SQLite → PostgreSQL, CSV/booking connectors, multi-tenant.

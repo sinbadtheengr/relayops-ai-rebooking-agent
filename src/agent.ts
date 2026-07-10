@@ -25,6 +25,9 @@ export function formatDailySummaryText(): string {
     `*RelayOps Daily Rebooking Scan* (${formatDate(summary.generatedAt)})`,
     `${summary.overdueCustomerCount} overdue customers found. ${summary.highPriorityCount} high priority, ${summary.mediumPriorityCount} medium priority.`,
     `Estimated recoverable revenue: *${formatCurrency(summary.estimatedRecoverableRevenueCents)}*.`,
+    ...(summary.recentlyContactedCount > 0
+      ? [`${summary.recentlyContactedCount} recently-contacted customers suppressed from this scan.`]
+      : []),
     "",
     top || "No overdue customers today.",
     "",

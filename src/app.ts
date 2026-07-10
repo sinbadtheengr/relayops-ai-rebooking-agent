@@ -3,10 +3,22 @@ import { config } from "./config.js";
 import { seedDemoData } from "./demoData.js";
 import { listCustomerRecords } from "./db.js";
 import { answerBusinessQuestion } from "./agent.js";
-import { markCustomerContacted } from "./relayops.js";
+import { CONTACT_COOLDOWN_DAYS, createOutreachDraft, markCustomerContacted } from "./relayops.js";
 import { getDailySummary } from "./relayops.js";
-import { dailySummaryBlocks, outreachDraftBlocks } from "./slackBlocks.js";
+import { dailySummaryBlocks, homeDashboardBlocks, outreachDraftBlocks } from "./slackBlocks.js";
 import { scheduleDailyScan } from "./scheduler.js";
+
+/** Best-effort ephemeral notice when an action targets a customer that no longer exists (e.g. stale button after a re-seed). */
+async function notifyStale(respond: (message: any) => Promise<unknown>): Promise<void> {
+  try {
+    await respond({
+      response_type: "ephemeral",
+      text: "Sorry — I couldn't find that customer anymore. Run `/relayops scan` for a fresh report."
+    });
+  } catch {
+    // A failed respond must not rethrow out of the action handler.
+  }
+}
 
 if (!config.slackBotToken || !config.slackAppToken || !config.slackSigningSecret) {
   throw new Error(
@@ -71,17 +83,26 @@ app.event("app_mention", async ({ event, say, client, sayStream, setStatus }) =>
   const threadTs = (event as { thread_ts?: string; ts?: string }).thread_ts ?? (event as { ts?: string }).ts;
 
   if ((event as { channel?: string; ts?: string }).channel && (event as { ts?: string }).ts) {
-    await client.reactions.add({
-      channel: (event as { channel: string }).channel,
-      timestamp: (event as { ts: string }).ts,
-      name: "eyes"
-    });
+    try {
+      await client.reactions.add({
+        channel: (event as { channel: string }).channel,
+        timestamp: (event as { ts: string }).ts,
+        name: "eyes"
+      });
+    } catch {
+      // Decoration only. Slack redelivers events on slow acks (already_reacted),
+      // and some surfaces disallow reactions — never let this abort the answer.
+    }
   }
 
-  await setStatus?.({
-    status: "Checking CRM and booking records...",
-    loading_messages: ["Scoring overdue customers", "Calculating recovery value", "Drafting the next best action"]
-  });
+  try {
+    await setStatus?.({
+      status: "Checking CRM and booking records...",
+      loading_messages: ["Scoring overdue customers", "Calculating recovery value", "Drafting the next best action"]
+    });
+  } catch {
+    // Status is decoration; the answer below is the job.
+  }
 
   await respondToPrompt({
     text: text || "Summarize today's opportunities",
@@ -129,19 +150,45 @@ app.event("assistant_thread_started" as never, async ({ client, event, logger }:
   }
 });
 
+async function publishHome(client: any, userId: string): Promise<void> {
+  await client.views.publish({
+    user_id: userId,
+    view: { type: "home", blocks: homeDashboardBlocks(getDailySummary()) }
+  });
+}
+
+app.event("app_home_opened", async ({ event, client, logger }) => {
+  try {
+    await publishHome(client, (event as { user: string }).user);
+  } catch (error) {
+    logger.error(error);
+  }
+});
+
+app.action("refresh_home", async ({ ack, body, client, logger }) => {
+  await ack();
+  try {
+    await publishHome(client, (body as { user: { id: string } }).user.id);
+  } catch (error) {
+    logger.error(error);
+  }
+});
+
 app.action("draft_customer", async ({ ack, body, respond, logger }) => {
   await ack();
   const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
   if (!action?.value) return;
 
   try {
+    const draft = createOutreachDraft(action.value);
     await respond({
       response_type: "ephemeral",
       text: "RelayOps outreach draft",
-      blocks: outreachDraftBlocks(action.value)
+      blocks: outreachDraftBlocks(draft)
     } as never);
   } catch (error) {
     logger.error(error);
+    await notifyStale(respond);
   }
 });
 
@@ -151,13 +198,16 @@ app.action("mark_contacted", async ({ ack, body, respond, logger }) => {
   if (!action?.value) return;
 
   try {
-    const customer = markCustomerContacted(action.value, "Contacted from Slack action");
+    const actingUser = (body as { user?: { id?: string } }).user?.id;
+    const note = actingUser ? `Marked contacted from Slack by <@${actingUser}>` : "Marked contacted from Slack";
+    const customer = markCustomerContacted(action.value, note);
     await respond({
       response_type: "ephemeral",
-      text: `${customer.fullName} was marked as contacted.`
+      text: `${customer.fullName} was marked as contacted and will drop out of scans for the next ${CONTACT_COOLDOWN_DAYS} days.`
     } as never);
   } catch (error) {
     logger.error(error);
+    await notifyStale(respond);
   }
 });
 

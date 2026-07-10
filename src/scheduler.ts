@@ -11,11 +11,17 @@ export function scheduleDailyScan(app: App): void {
   cron.schedule(
     config.dailyScanCron,
     async () => {
-      await app.client.chat.postMessage({
-        channel: config.slackReportChannelId!,
-        text: formatDailySummaryText(),
-        blocks: dailySummaryBlocks(getDailySummary())
-      });
+      try {
+        await app.client.chat.postMessage({
+          channel: config.slackReportChannelId!,
+          text: formatDailySummaryText(),
+          blocks: dailySummaryBlocks(getDailySummary())
+        });
+      } catch (error) {
+        // Never rethrow: a single failed post (revoked token, archived channel,
+        // transient network) must not kill the process. The next run still fires.
+        console.error("Daily scan failed to post to Slack:", error);
+      }
     },
     { timezone: config.timezone }
   );

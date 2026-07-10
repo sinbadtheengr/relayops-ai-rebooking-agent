@@ -18,17 +18,21 @@ RelayOps answers those questions inside the tool staff already use.
 ## MVP Features
 
 - Slack app using Bolt for JavaScript and agent-oriented Slack surfaces
+- **MCP server** exposing the same rebooking intelligence to any MCP client (Claude Desktop, IDEs) — runs credential-free
+- **App Home dashboard** with live KPIs (recoverable revenue, overdue count, high-priority, suppressed) and action buttons
 - `/relayops scan` daily rebooking report
 - App mention and DM natural-language questions
-- Suggested Assistant prompts for common workflows
+- Suggested Assistant prompts, streaming responses, and thinking status (Slack AI-app surface)
 - 100-customer demo CRM and appointment dataset
 - Priority scoring by overdue gap, spend, loyalty, VIP status, and consent
+- **Closed follow-up loop**: customers marked contacted are suppressed from scans for a 14-day cooldown
 - AI function calling with OpenAI for grounded responses
 - Deterministic fallback when `OPENAI_API_KEY` is not configured
 - Personalized SMS, email, and phone outreach drafts
 - Slack buttons for draft outreach and mark contacted
 - SQLite storage with a clean PostgreSQL upgrade path
 - Daily cron scheduling for morning reports
+- Automated test suite (`npm test`, Vitest) over scoring, filters, contact suppression, and the deterministic parser
 
 ## Example Slack Questions
 
@@ -47,9 +51,16 @@ RelayOps answers those questions inside the tool staff already use.
 - SQLite via `better-sqlite3`
 - `node-cron` for scheduled scans
 
-## Slack Builder Challenge Hackathon Alignment
+## Slack Agent Builder Challenge Alignment
 
-RelayOps is now built for the **Slack Builder Challenge Hackathon** as a Slack-native agent experience, and is no longer positioned for the UiPath Challenge. The core product lives where staff already work: Slack channels, Slack DMs, slash commands, app mentions, Block Kit actions, and human-in-the-loop review.
+**Track:** New Slack Agent.
+
+**Required technology (the challenge asks for at least one of three):**
+
+- ✅ **MCP server integration** — `src/mcp/server.ts` exposes RelayOps as five MCP tools over stdio (`@modelcontextprotocol/sdk`). The same domain service layer that powers the Slack app also powers the MCP server, so any MCP client gets identical, data-grounded answers. Runs with no OpenAI key.
+- ✅ **Slack AI capabilities** — Slack Agents & AI-Apps surface: assistant threads with suggested prompts, streaming markdown responses, and thinking-status updates.
+
+RelayOps is built for the **Slack Agent Builder Challenge** as a Slack-native agent experience. The core product lives where staff already work: Slack channels, DMs, slash commands, app mentions, the App Home tab, Block Kit actions, and human-in-the-loop review.
 
 Challenge fit:
 
@@ -77,11 +88,12 @@ This project was built with Codex as an AI-assisted coding agent. Codex helped s
 
 ## Judging Criteria Coverage
 
-- **Real business value**: estimates recoverable revenue from customers who are overdue for rebooking.
-- **Practical AI usage**: uses structured tools and scoring logic instead of generic chatbot responses.
-- **Slack experience**: works in channels, DMs, slash commands, app mentions, and Block Kit actions.
-- **Production readiness**: includes SQLite storage, clear PostgreSQL upgrade path, consent-aware channel recommendations, deterministic fallback, and setup docs.
-- **Demo readiness**: includes mock data, local scripts, Slack app manifest, pitch deck, demo script, and video script.
+Mapped to the four official criteria:
+
+- **Technological Implementation** — satisfies the required tech via an MCP server (and the Slack AI-app surface); clean layered architecture (adapters → agent → service → pure domain → single SQL module); AI is grounded in structured tools with a deterministic fallback; a Vitest suite (`npm test`) covers scoring, filters, contact suppression, and the parser.
+- **Design** — three Slack surfaces (slash command, App Home dashboard, conversational DM/mention) with Block Kit reports, KPI fields, and action buttons; a real frontend/backend blend, not a chat-only bot.
+- **Potential Impact** — every appointment-based SMB (salons, dental, physio, home services) loses revenue to un-rebooked customers; RelayOps quantifies and recovers it. The MCP server extends that intelligence beyond Slack to any AI client.
+- **Quality of the Idea** — not another generic chatbot: a grounded, human-in-the-loop revenue-recovery agent where every number traces to the database and the follow-up loop actually closes (contacted customers stop reappearing).
 
 ## Quick Start
 
@@ -138,6 +150,42 @@ OPENAI_MODEL=gpt-4o-mini
 
 The agent is instructed to call tools for all customer facts. It should not invent customers or revenue estimates.
 
+## MCP Server (Model Context Protocol)
+
+RelayOps runs as an MCP server so any MCP client can query the same rebooking intelligence the Slack app uses. It needs **no Slack or OpenAI credentials** — it seeds the local demo data on first run.
+
+Run it directly:
+
+```bash
+npm run mcp
+```
+
+Connect it to **Claude Desktop** — add this to `claude_desktop_config.json` (replace the path with your checkout):
+
+```jsonc
+{
+  "mcpServers": {
+    "relayops": {
+      "command": "npx",
+      "args": ["tsx", "scripts/mcp.ts"],
+      "cwd": "/absolute/path/to/relayops-ai-rebooking-agent"
+    }
+  }
+}
+```
+
+Then ask Claude things like *"Summarize today's RelayOps rebooking opportunities"* or *"Draft a follow-up for the most overdue VIP."*
+
+Tools exposed (all read-only except an internal contact log — RelayOps never messages customers):
+
+| Tool | Purpose |
+|---|---|
+| `get_rebooking_opportunities` | Ranked overdue customers, filterable by priority/VIP/service/days |
+| `summarize_today` | Daily recoverable-revenue snapshot |
+| `draft_follow_up` | Personalized outreach draft for staff review (by id or name) |
+| `list_recently_contacted` | Customers currently suppressed by the cooldown |
+| `mark_contacted` | Log staff contact (internal only), suppressing the customer from scans |
+
 ## Daily Scan
 
 Enable scheduled Slack reports:
@@ -153,15 +201,19 @@ TIMEZONE=America/Toronto
 
 ```text
 src/
-  app.ts            Slack app runtime
+  app.ts            Slack app runtime (slash command, DM, mention, App Home, actions)
   agent.ts          AI tool-calling and deterministic fallback
   db.ts             SQLite schema and repository functions
   demoData.ts       100-customer dataset generator
+  mcp/server.ts     MCP server (adapter over the service layer)
   outreach.ts       Personalized outreach drafts
   relayops.ts       Product-domain service layer
   scheduler.ts      Daily Slack report cron
   scoring.ts        Rebooking priority model
-  slackBlocks.ts    Slack Block Kit views
+  slackBlocks.ts    Slack Block Kit views (report, App Home, drafts)
+scripts/
+  mcp.ts            MCP server entry point (npm run mcp)
+test/               Vitest suite (scoring, filters, suppression, parser)
 docs/
   architecture.md
   demo-script.md

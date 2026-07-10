@@ -1,6 +1,5 @@
 import type { KnownBlock } from "@slack/types";
 import type { CustomerInsight, DailySummary } from "./types.js";
-import { createOutreachDraft } from "./relayops.js";
 import { formatCurrency, formatDate } from "./utils.js";
 
 function priorityEmoji(priority: string): string {
@@ -50,6 +49,16 @@ export function customerBlocks(customer: CustomerInsight): KnownBlock[] {
   ];
 }
 
+/** Single mrkdwn line summarizing the scan headline stats. */
+function summaryHeadline(summary: DailySummary): string {
+  const base = `*${summary.overdueCustomerCount}* overdue customers · *${summary.highPriorityCount}* high priority · *${formatCurrency(
+    summary.estimatedRecoverableRevenueCents
+  )}* recoverable revenue`;
+  return summary.recentlyContactedCount > 0
+    ? `${base}\n:white_check_mark: ${summary.recentlyContactedCount} already contacted this cycle — suppressed from this scan.`
+    : base;
+}
+
 export function dailySummaryBlocks(summary: DailySummary): KnownBlock[] {
   const blocks: KnownBlock[] = [
     {
@@ -58,12 +67,7 @@ export function dailySummaryBlocks(summary: DailySummary): KnownBlock[] {
     },
     {
       type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*${summary.overdueCustomerCount}* overdue customers · *${summary.highPriorityCount}* high priority · *${formatCurrency(
-          summary.estimatedRecoverableRevenueCents
-        )}* recoverable revenue`
-      }
+      text: { type: "mrkdwn", text: summaryHeadline(summary) }
     },
     { type: "divider" }
   ];
@@ -83,8 +87,68 @@ export function dailySummaryBlocks(summary: DailySummary): KnownBlock[] {
   return blocks;
 }
 
-export function outreachDraftBlocks(customerId: string): KnownBlock[] {
-  const { customer, message } = createOutreachDraft(customerId);
+/**
+ * App Home dashboard: a persistent, per-user view of today's rebooking opportunities.
+ * Pure function of a DailySummary — the caller fetches the data (keeps the view layer I/O-free).
+ */
+export function homeDashboardBlocks(summary: DailySummary): KnownBlock[] {
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: ":dart: RelayOps — Rebooking Command Center" }
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `Snapshot for ${formatDate(summary.generatedAt)} · updated when you open this tab` }]
+    },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Recoverable revenue*\n${formatCurrency(summary.estimatedRecoverableRevenueCents)}` },
+        { type: "mrkdwn", text: `*Overdue customers*\n${summary.overdueCustomerCount}` },
+        { type: "mrkdwn", text: `*High priority*\n${summary.highPriorityCount}` },
+        { type: "mrkdwn", text: `*Already contacted*\n${summary.recentlyContactedCount} (suppressed)` }
+      ]
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: ":arrows_counterclockwise: Refresh" },
+          action_id: "refresh_home"
+        }
+      ]
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: "*Top opportunities to contact today*" }
+    }
+  ];
+
+  if (summary.topOpportunities.length === 0) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: ":tada: No overdue customers right now — everyone is on cycle." }
+    });
+    return blocks;
+  }
+
+  for (const customer of summary.topOpportunities.slice(0, 5)) {
+    blocks.push(...customerBlocks(customer), { type: "divider" });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [{ type: "mrkdwn", text: "RelayOps drafts outreach for staff review and never messages customers automatically." }]
+  });
+
+  return blocks;
+}
+
+export function outreachDraftBlocks(draft: { customer: CustomerInsight; message: string }): KnownBlock[] {
+  const { customer, message } = draft;
   return [
     {
       type: "section",
@@ -107,4 +171,3 @@ export function outreachDraftBlocks(customerId: string): KnownBlock[] {
     }
   ];
 }
-

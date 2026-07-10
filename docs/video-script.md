@@ -1,26 +1,31 @@
-# 2-Minute Demo Video Script
+# 3-Minute Demo Video Script
 
-## 0:00-0:15 Problem
+Target: ~3:00. Runs credential-free (no OpenAI key needed).
 
-Small businesses depend on repeat customers, but most do not have staff or automation to chase overdue rebookings. RelayOps is an AI employee in Slack that finds missed revenue every morning.
+## 0:00–0:20 Problem
 
-## 0:15-0:35 Daily Scan
+Appointment-based small businesses — salons, dental clinics, physio, home services — already paid to acquire their customers. The revenue they quietly lose is the customer who never rebooks, because nobody on staff owns the job of noticing. RelayOps is a Slack-native AI agent that finds that missed revenue every morning and helps staff recover it.
 
-Show `/relayops scan`. RelayOps reports overdue customers, high-priority opportunities, and estimated recoverable revenue. Each customer includes why they were selected, last visit timing, expected return cycle, likelihood, and best channel.
+## 0:20–0:45 Daily Scan
 
-## 0:35-0:55 Actionable AI
+Run `/relayops scan`. RelayOps posts a Block Kit report: overdue customers, high-priority opportunities, and estimated recoverable revenue. Each customer shows why it was selected, days overdue, rebooking likelihood, best channel, and recovery value — all from booking and CRM data.
 
-Click `Draft outreach`. RelayOps creates a personalized SMS, email, or phone script using the customer’s last service, spending pattern, return cycle, and consent status.
+## 0:45–1:10 Grounded, Conversational AI
 
-## 0:55-1:20 Natural Language
+DM the app: `Who has not returned in 90 days?` then `Show overdue VIP customers.` RelayOps answers from structured tools, not generic chatbot memory. Note the streaming response and the "Checking CRM records…" thinking status — Slack's AI-app surface.
 
-Ask: `Who has not returned in 90 days?` Then ask: `Show overdue VIP customers.` RelayOps answers from structured booking and CRM data, not generic chatbot memory.
+## 1:10–1:35 Draft + Close the Loop
 
-## 1:20-1:40 Revenue Workflow
+Click `Draft outreach` — a personalized SMS/email/phone script using the customer's last service, channel preference, and consent. Click `Mark contacted`. Re-run `/relayops scan`: that customer is **gone**, and the report notes they were suppressed. RelayOps keeps the promise its report makes — no double-contacting, no spammed customers. Humans stay in the loop: it drafts, staff send.
 
-Ask: `Summarize today's opportunities.` Show recoverable revenue and recommended actions. Click `Mark contacted` to log staff work.
+## 1:35–2:05 App Home Dashboard
 
-## 1:40-2:00 Close
+Open the RelayOps **App Home** tab: live KPIs — recoverable revenue, overdue count, high-priority, already-contacted — and the top opportunities with action buttons, right where staff already work.
 
-RelayOps starts simple with SQLite and mock CRM data, but the architecture is ready for booking-system connectors, PostgreSQL, and RAG over customer notes and playbooks. This is a practical AI product that helps SMBs recover revenue from customers they already earned.
+## 2:05–2:40 MCP Server (the required-technology highlight)
 
+Switch to Claude Desktop, where RelayOps is configured as an **MCP server**. Ask: `Summarize today's RelayOps rebooking opportunities` and `Draft a follow-up for the most overdue VIP.` The same grounded intelligence that powers Slack is now callable from any MCP client — because both adapters share one domain core. Human-in-the-loop is preserved: the MCP tools draft and log, never send.
+
+## 2:40–3:00 Close
+
+RelayOps starts with SQLite and demo data, but the architecture is production-shaped: a single SQL module swaps to PostgreSQL, booking connectors and CSV import feed real data, and consent enforcement gates outreach. One clean domain core, a Slack agent and an MCP server on top — a practical AI product that recovers revenue businesses already earned.
