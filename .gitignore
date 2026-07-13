@@ -6,3 +6,4 @@ data/*.db-shm
 data/*.db-wal
 .slack/
 *.log
+docs/demo-voiceover.md

@@ -1,0 +1,28 @@
+flowchart TB
+  subgraph Adapters["Adapters"]
+    Staff["Staff in Slack"] -->|DM / mention / /relayops / App Home| Bolt["Slack Bolt App<br/>(src/app.ts)"]
+    Cron["Morning Cron<br/>(src/scheduler.ts)"] --> Bolt
+    MCPClient["Any MCP client<br/>(Claude Desktop, IDEs)"] -->|stdio| MCP["RelayOps MCP Server<br/>(src/mcp/server.ts)"]
+  end
+
+  Bolt --> AgentLayer["Agent Orchestration<br/>(src/agent.ts)<br/>OpenAI tool-calling + deterministic fallback"]
+
+  subgraph Core["Shared Domain Core"]
+    RelayOps["Service Layer<br/>(src/relayops.ts)"]
+    Scoring["Scoring + Outreach<br/>(pure: scoring.ts, outreach.ts)"]
+    DB["Persistence<br/>(src/db.ts — only SQL module)"]
+    RelayOps --> Scoring
+    RelayOps --> DB
+  end
+
+  AgentLayer --> RelayOps
+  MCP --> RelayOps
+  DB --> SQLite[("SQLite CRM / Booking Store")]
+  SQLite -. upgrade path .-> Postgres[("PostgreSQL")]
+
+  classDef adapter fill:#E8F1FF,stroke:#2F6FED,color:#0B2A5B;
+  classDef core fill:#E9F9F0,stroke:#1F9D57,color:#0B3D22;
+  classDef store fill:#FFF4E5,stroke:#E08600,color:#5B3B00;
+  class Staff,Bolt,Cron,MCPClient,MCP adapter;
+  class RelayOps,Scoring,DB,AgentLayer core;
+  class SQLite,Postgres store;
