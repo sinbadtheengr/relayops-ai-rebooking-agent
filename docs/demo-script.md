@@ -23,7 +23,7 @@ For Slack:
 1. **Daily scan** — run `/relayops scan`. Show overdue count, high-priority customers, and recoverable revenue.
 2. **Grounded Q&A** — DM the app: `Who has not returned in 90 days?`, then `Show overdue VIP customers`. Point out every fact traces to booking data.
 3. **Draft outreach** — click `Draft outreach` on a high-priority customer. Show the personalized message using last service, channel preference, and consent.
-4. **Close the loop (the money beat)** — click `Mark contacted`. Re-run `/relayops scan` and show that customer is **gone** and the header notes "1 already contacted this cycle — suppressed." No double-contacting, no spammed customers.
+4. **Close the loop (the money beat)** — click `Mark contacted`. Re-run `/relayops scan` and show that customer is **gone** and the header notes "1 already contacted this cycle — suppressed." Then DM: `Who have we already contacted?` — the suppressed list comes back, by name. No double-contacting, no spammed customers.
 5. **App Home dashboard** — open the RelayOps App Home tab. Show live KPIs (recoverable revenue, overdue, high-priority, suppressed) and top opportunities with buttons.
 6. **MCP server** — in Claude Desktop (RelayOps configured as an MCP server), ask `Summarize today's RelayOps rebooking opportunities` and `Draft a follow-up for the most overdue VIP`. Same grounded intelligence, outside Slack.
 

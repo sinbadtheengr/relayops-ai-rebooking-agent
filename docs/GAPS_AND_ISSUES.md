@@ -170,7 +170,7 @@
 
 ### S-02 · Hygiene · Binary artifacts committed to git; local `.env` caution
 - **Location:** `relayops-ai-rebooking-agent-submission.zip`, `RelayOps_AI_Rebooking_Agent_Pitch_Deck.pptx` (tracked); `.env` (untracked, correctly gitignored)
-- The zip was audited 2026-07-06: it contains only source, docs, and `.env.example` — **no secrets, no database**. Keep it that way: never regenerate the zip with `zip -r . ` from a dirty working tree. The local `.env` holds real tokens; it stays untracked.
+- The zip was regenerated 2026-07-13 from an explicit whitelist (src, scripts, test, docs, .github, README, CLAUDE.md, LICENSE, package files, tsconfig, vitest config, manifest, `.env.example`) and re-audited: **no secrets, no database, no build artifacts**. Keep it that way: never regenerate the zip with `zip -r . ` from a dirty working tree. The local `.env` holds real tokens; it stays untracked.
 
 ---
 

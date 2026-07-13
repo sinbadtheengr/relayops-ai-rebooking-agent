@@ -26,7 +26,7 @@ RelayOps answers those questions inside the tool staff already use.
 - 100-customer demo CRM and appointment dataset
 - Priority scoring by overdue gap, spend, loyalty, VIP status, and consent
 - **Closed follow-up loop**: customers marked contacted are suppressed from scans for a 14-day cooldown
-- AI function calling with OpenAI for grounded responses
+- AI function calling with OpenAI for grounded responses — multi-round tool chaining with zod-validated arguments
 - Deterministic fallback when `OPENAI_API_KEY` is not configured
 - Personalized SMS, email, and phone outreach drafts
 - Slack buttons for draft outreach and mark contacted
@@ -41,6 +41,7 @@ RelayOps answers those questions inside the tool staff already use.
 - Show overdue VIP customers
 - Draft a follow-up message
 - Summarize today's opportunities
+- Who have we already contacted?
 
 ## Tech Stack
 

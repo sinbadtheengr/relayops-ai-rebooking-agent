@@ -95,7 +95,7 @@ scoring.ts / outreach.ts          (pure domain logic)
 db.ts                             (persistence — SQLite today, PostgreSQL later)
 ```
 
-The PostgreSQL upgrade path depends on keeping `db.ts` the only module that touches SQL. `slackBlocks.ts` currently violates layering by calling `createOutreachDraft` directly (view importing service) — acceptable for now, noted in gaps.
+The PostgreSQL upgrade path depends on keeping `db.ts` the only module that touches SQL. `slackBlocks.ts` is now a pure view layer (G-16 fixed): callers fetch data and pass it in. The MCP server (`src/mcp/server.ts`) is another adapter over the same `relayops.ts` service layer.
 
 ## 5. Runbook
 
@@ -121,7 +121,7 @@ Three SQLite tables — full column detail, derived types, and invariants are in
 
 - **`customers`** — profile, preferred channel, VIP flag, `typical_return_days` (expected rebooking cycle), lifetime/average spend in **cents**, `marketing_consent`.
 - **`appointments`** — per-visit rows: service type/date, revenue cents, staff member, status (`completed | cancelled | no_show`).
-- **`outreach_logs`** — one row per staff contact action (channel, message, status, timestamp). Written today, **never read** — wiring this into scoring is gap G-01.
+- **`outreach_logs`** — one row per staff contact action (channel, message, status, timestamp). Read by the suppression logic (G-01 fixed): a `contacted` row within the 14-day cooldown drops the customer from scans and summaries.
 
 Derived (in-memory) shapes: `CustomerRecord` (customer + latest completed visit + visit count) → `CustomerInsight` (adds score, priority, likelihood, recoverable revenue, recommended channel, selection reason).
 
@@ -130,14 +130,15 @@ Derived (in-memory) shapes: `CustomerRecord` (customer + latest completed visit 
 ### M0 — Hackathon MVP ✅ (complete)
 Everything in §3. Demo-ready with seeded data, docs, pitch deck, video script.
 
-### M1 — Correctness & Trust (next)
-Make the demo honest and the loop actually close. Work items are specified in `GAPS_AND_ISSUES.md`; the critical ones:
+### M1 — Correctness & Trust (mostly complete)
+Make the demo honest and the loop actually close. Work items are specified in `GAPS_AND_ISSUES.md`:
 
-- **Close the follow-up loop:** contacted customers suppressed from reports for a cooldown window (G-01).
-- Error handling so one failed Slack API call can't kill a handler or the cron process (G-02, G-03).
-- Validate AI tool arguments; stop silently swallowing tool errors (G-06, G-07).
-- Minimal test suite: scoring, filters, deterministic parser, suppress-after-contact (G-05).
-- PII hygiene in shared channels and authorization on actions (S-01); keep the committed submission zip free of secrets — audited clean 2026-07-06 (S-02).
+- ✅ **Close the follow-up loop:** contacted customers suppressed from reports for a 14-day cooldown (G-01).
+- ✅ Error handling so one failed Slack API call can't kill a handler or the cron process (G-02, G-03, G-09).
+- ✅ Validate AI tool arguments; bounded multi-round tool loop; log real errors (G-06, G-07).
+- ✅ Test suite (Vitest) + GitHub Actions CI: scoring, filters, deterministic parser, suppress-after-contact, timezone (G-05).
+- ✅ MCP server over the service layer (MF-09).
+- Remaining: full S-01 authorization (acting user is now recorded; role checks pending), persist drafts in the outreach log (G-08), lint config.
 
 ### M2 — Pilot-ready single tenant
 - Real data ingestion: CSV import first, then one booking connector (e.g. Square or Fresha).
