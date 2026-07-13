@@ -56,6 +56,13 @@ export function getOpportunities(filters: OpportunityFilters = {}): CustomerInsi
   return opportunities.slice(0, filters.limit ?? 10);
 }
 
+/** Overdue customers currently suppressed from scans because they were contacted within the cooldown window. */
+export function listRecentlyContacted(): CustomerInsight[] {
+  const ranked = rankOpportunities(listCustomerRecords());
+  const contacted = getRecentlyContactedCustomerIds(cooldownSinceIso());
+  return ranked.filter((customer) => contacted.has(customer.id));
+}
+
 export function getDailySummary(): DailySummary {
   const { opportunities, recentlyContactedCount } = rankedWithSuppression();
   return summarizeOpportunities(opportunities, recentlyContactedCount);

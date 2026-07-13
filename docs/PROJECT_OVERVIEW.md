@@ -30,7 +30,10 @@ The project originated as a hackathon MVP (UiPath AgentHack, then repositioned f
 | AI tool-calling (OpenAI) grounded in structured data, with deterministic fallback | ✅ Implemented |
 | 100-customer demo dataset, runnable with zero credentials | ✅ Implemented |
 | Scheduled morning report via cron | ✅ Implemented |
-| Follow-up state (contacted customers drop out of future reports) | ⚠️ Partially — logged but not used (see Gaps G-01) |
+| Follow-up state (contacted customers drop out of future reports) | ✅ Implemented — 14-day cooldown suppression (G-01) |
+| MCP server exposing the service layer to any MCP client | ✅ Implemented (`npm run mcp`) |
+| App Home dashboard with KPIs and action buttons | ✅ Implemented |
+| Automated tests + CI | ✅ Implemented — Vitest (`npm test`), GitHub Actions build+test |
 | Multi-tenant, real booking connectors, consent enforcement, audit logs | ❌ Roadmap only |
 
 **Non-goals (current phase):** sending customer outreach automatically, payment/booking write-back, non-Slack UI.
@@ -42,7 +45,9 @@ The project originated as a hackathon MVP (UiPath AgentHack, then repositioned f
 | Daily rebooking scan | `/relayops` or `/relayops scan` | In-channel Block Kit report: overdue count, recoverable revenue, top 5 customers with action buttons |
 | Natural-language Q&A | `/relayops <question>`, app mention, DM | Routes to `answerBusinessQuestion()` — OpenAI tool-calling or deterministic keyword parser |
 | Outreach drafting | "Draft outreach" button, "draft" questions | Channel-aware templates (SMS/email/phone script) personalized per customer |
-| Mark contacted | "Mark contacted" button | Writes a row to `outreach_logs` |
+| Mark contacted | "Mark contacted" button | Logs the contact (with acting user) and suppresses the customer from scans for a 14-day cooldown |
+| App Home dashboard | RelayOps Home tab | Live KPIs (recoverable revenue, overdue, high-priority, suppressed) + top opportunities with buttons |
+| MCP server | `npm run mcp` | Five tools over stdio exposing the same service layer to any MCP client (Claude Desktop, IDEs); credential-free |
 | Suggested prompts | Assistant thread started | Four canned prompts via `assistant.threads.setSuggestedPrompts` |
 | Scheduled scan | `node-cron`, opt-in via env | Posts the daily summary to `SLACK_REPORT_CHANNEL_ID` on `DAILY_SCAN_CRON` |
 | CLI demo tools | `npm run seed / scan / demo:ask` | Everything works offline without Slack or OpenAI credentials |
@@ -72,7 +77,9 @@ The project originated as a hackathon MVP (UiPath AgentHack, then repositioned f
 | `src/config.ts` | Env config with zod validation |
 | `src/types.ts` | Shared domain types |
 | `src/utils.ts` | Currency/date formatting, `daysBetween`, `clamp` |
-| `scripts/*.ts` | CLI entry points (`seed`, `run-daily-scan`, `demo-query`) |
+| `src/mcp/server.ts` | MCP server adapter over the service layer (five stdio tools) |
+| `scripts/*.ts` | CLI entry points (`seed`, `run-daily-scan`, `demo-query`, `mcp`) |
+| `test/*.test.ts` | Vitest suite (scoring, filters, suppression, deterministic parser, timezone) |
 
 ### Layering rule
 
@@ -100,11 +107,13 @@ npm run scan                # print the daily report to stdout (no Slack needed)
 npm run demo:ask -- "Show overdue VIP customers"
 npm run dev                 # start the Slack app (requires SLACK_* env vars)
 npm run build && npm start  # compiled production run
+npm test                    # Vitest suite — hermetic, no credentials
+npm run mcp                 # MCP server on stdio — no credentials
 ```
 
 Slack setup: create an app from `manifest.json`, enable Socket Mode, create an app token with `connections:write`, install, fill `.env`. See README "Slack Setup".
 
-**There is no test suite and no lint/CI.** Verification today = `npm run build` (typecheck) + the CLI scripts + manual Slack testing. Adding tests is a top roadmap item.
+Verification = `npm run build && npm test` + the CLI scripts + manual Slack testing. GitHub Actions runs build + test on every push/PR. There is no lint config yet.
 
 ## 6. Data Model (summary)
 

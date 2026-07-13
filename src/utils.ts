@@ -1,3 +1,5 @@
+import { config } from "./config.js";
+
 export function formatCurrency(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -15,7 +17,10 @@ export function formatDate(date: string): string {
 }
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // "Today" is the business day in the configured timezone, not UTC (G-13):
+  // a UTC slice flips to tomorrow's date every evening in America/Toronto.
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: config.timezone }).format(new Date());
 }
 
 export function daysBetween(startIso: string, endIso = todayIso()): number {

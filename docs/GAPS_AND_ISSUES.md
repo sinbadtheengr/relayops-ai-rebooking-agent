@@ -89,6 +89,7 @@
 ## Medium
 
 ### G-06 · Bug · AI layer swallows all errors blind, and supports only one tool round
+- ✅ Fixed 2026-07-13: `answerBusinessQuestion` now runs a bounded tool loop (max 4 rounds, `tools` passed every round) so the model can chain calls (find → draft); tool failures return `{error}` tool results instead of throwing; the outer catch logs the actual error before falling back.
 - **Location:** `src/agent.ts:133-182`
 - **What happens:** Two distinct problems. (a) The catch-all at `src/agent.ts:178-181` discards the error object — an OpenAI auth failure, a bug in `runTool`, and a malformed tool-arg JSON all collapse into the same `console.warn` string with zero diagnostics. (b) The second completion call omits the `tools` parameter, so the model cannot chain calls (e.g. `get_rebooking_opportunities` → `draft_follow_up` for "draft a message for my most overdue VIP" requires two rounds; today the model must guess a customerId in round one or fail).
 - **Fix specification:**
@@ -97,6 +98,7 @@
   3. Keep the outer catch → deterministic fallback as the last resort.
 
 ### G-07 · Bug · AI tool arguments are trusted without validation
+- ✅ Fixed 2026-07-13: zod schemas per tool in `src/agent.ts` — `priority` coerced case-insensitively, `limit` clamped to 1–25 (default 8), `minDays*` non-negative; unknown `customerId` returns an `{error}` tool result (not a throw) so the model can recover. Parse failures return the zod message as the tool result.
 - **Location:** `src/agent.ts:112-131` (`runTool`)
 - **What happens:** Raw model-generated JSON is cast and passed straight into the domain layer. `priority: "high"` (wrong case) silently matches nothing; `limit: 100000` is honored; a fabricated `customerId` throws, which today (pre-G-06) aborts the whole AI path to fallback — the user gets a generic answer unrelated to what they asked.
 - **Fix specification:** Define zod schemas per tool (zod is already a dependency):
@@ -117,6 +119,7 @@
 - **Fix specification:** In each catch, `await respond({ response_type: "ephemeral", text: "Sorry — I couldn't find that customer anymore. Run /relayops scan for a fresh report." })`, itself wrapped so a failed respond can't rethrow.
 
 ### G-10 · Bug · Foreign keys are declared but not enforced
+- ✅ Fixed 2026-07-13: `db.pragma("foreign_keys = ON")` set in `getDb()` after the WAL pragma; `resetDemoData()` deletion order (`outreach_logs → appointments → customers`) verified child-first.
 - **Location:** `src/db.ts:14-17`
 - **What happens:** SQLite ignores `REFERENCES` constraints unless `PRAGMA foreign_keys = ON` is set per connection; only `journal_mode = WAL` is set. Orphaned `appointments`/`outreach_logs` rows are currently possible.
 - **Fix specification:** Add `db.pragma("foreign_keys = ON");` immediately after the WAL pragma in `getDb()`. Then fix the latent ordering bug it exposes: `resetDemoData()` (`src/db.ts:175-178`) already deletes children before parents — verify the deletion order stays `outreach_logs, appointments, customers`.
@@ -140,6 +143,7 @@
 - `"high"` matches "highlight", `"90"` matches any number containing 90, `"contact"` also matches "contacted". Acceptable for demo. Fix when touched: word-boundary regexes (`/\bhigh\b/`, `/\b90\b/`) and an ordered intent list.
 
 ### G-13 · Bug · Day boundaries use UTC while the business runs in `TIMEZONE`
+- ✅ Fixed 2026-07-13: `todayIso()` now derives the date via `Intl.DateTimeFormat("en-CA", { timeZone: config.timezone })`. Pinned by `test/utils.test.ts`.
 - **Location:** `src/utils.ts:17-25` (`todayIso`), `src/scoring.ts:56`
 - After ~19:00 in Toronto, `todayIso()` returns tomorrow's date: `daysSinceLastVisit` inflates by one and the report header shows the wrong date. Cosmetic at day granularity. Fix when touched: derive "today" via `Intl.DateTimeFormat("en-CA", { timeZone: config.timezone })`.
 

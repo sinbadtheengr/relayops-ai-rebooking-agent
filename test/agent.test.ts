@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { seedDemoData } from "../src/demoData.js";
 import { answerBusinessQuestion } from "../src/agent.js";
+import { getOpportunities, markCustomerContacted } from "../src/relayops.js";
 
 // With OPENAI_API_KEY unset (see test/setup.ts), answerBusinessQuestion routes
 // through the deterministic parser — this exercises parseDeterministicIntent.
@@ -21,6 +22,19 @@ describe("deterministic agent routing", () => {
 
   it("filters to VIP customers", async () => {
     const answer = await answerBusinessQuestion("Show overdue VIP customers");
+    expect(answer).toContain("Customers to contact");
+  });
+
+  it("routes 'already contacted' questions to the suppressed list, not the to-contact list", async () => {
+    const target = getOpportunities({ limit: 1 })[0];
+    markCustomerContacted(target.id, "test contact");
+    const answer = await answerBusinessQuestion("Who have we already contacted?");
+    expect(answer).toContain("Recently contacted");
+    expect(answer).toContain(target.fullName);
+  });
+
+  it("still routes 'contact today' questions to the to-contact list", async () => {
+    const answer = await answerBusinessQuestion("Which customers should we contact today?");
     expect(answer).toContain("Customers to contact");
   });
 

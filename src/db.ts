@@ -13,6 +13,8 @@ export function getDb(): Database.Database {
   if (dir && dir !== ".") fs.mkdirSync(dir, { recursive: true });
   db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
+  // SQLite ignores REFERENCES clauses unless this is set per connection (G-10).
+  db.pragma("foreign_keys = ON");
   migrate(db);
   return db;
 }

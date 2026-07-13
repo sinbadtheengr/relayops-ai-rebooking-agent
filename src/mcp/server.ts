@@ -6,6 +6,7 @@ import {
   getDailySummary,
   getInsight,
   getOpportunities,
+  listRecentlyContacted,
   markCustomerContacted
 } from "../relayops.js";
 import { formatCurrency, formatDate } from "../utils.js";
@@ -122,8 +123,7 @@ export function createRelayOpsMcpServer(): McpServer {
       inputSchema: {}
     },
     async () => {
-      const visible = new Set(getOpportunities({ limit: 1000 }).map((c) => c.id));
-      const suppressed = getOpportunities({ includeContacted: true, limit: 1000 }).filter((c) => !visible.has(c.id));
+      const suppressed = listRecentlyContacted();
       if (suppressed.length === 0) return text("No customers have been contacted within the cooldown window.");
       return text([`${suppressed.length} recently-contacted (suppressed):`, ...suppressed.map(insightLine)].join("\n"));
     }

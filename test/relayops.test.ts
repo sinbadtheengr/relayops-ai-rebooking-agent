@@ -6,6 +6,7 @@ import {
   createOutreachDraft,
   getDailySummary,
   getOpportunities,
+  listRecentlyContacted,
   markCustomerContacted
 } from "../src/relayops.js";
 
@@ -62,6 +63,12 @@ describe("G-01 contact suppression", () => {
     const nextId = getOpportunities({ limit: 1 })[0].id;
     markCustomerContacted(nextId, "test contact");
     expect(getDailySummary().recentlyContactedCount).toBe(before + 1);
+  });
+
+  it("surfaces suppressed customers via listRecentlyContacted", () => {
+    const target = getOpportunities({ limit: 1 })[0];
+    markCustomerContacted(target.id, "test contact");
+    expect(listRecentlyContacted().some((c) => c.id === target.id)).toBe(true);
   });
 
   it("does NOT suppress a contact older than the cooldown window", () => {
