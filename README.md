@@ -2,6 +2,16 @@
 
 RelayOps imports the spa’s booking CSV, finds overdue clients who can be contacted, and gives staff a private approval workflow in Slack. Staff deliver the approved copy through the spa’s existing email or SMS account and confirm the send. Booking and revenue outcomes come from subsequent booking exports.
 
+## Run the sample pilot
+
+From a clean checkout of this pilot branch, run the following command with Node.js 22 LTS and npm installed.
+
+```sh
+npm run demo:medspa
+```
+
+The command installs the locked dependencies and walks through a blocked delivery, staff approval, an SMS opt-out and a completed CAD $185 booking. Each run uses a fresh local SQLite database with fictional clients and simulated inbox activity. [Sample exports and staff walkthrough](examples/med-spa/README.md)
+
 ## Set up one client
 
 1. Install Node.js 22 LTS and run `npm ci`, `npm run build` and `npm test`.

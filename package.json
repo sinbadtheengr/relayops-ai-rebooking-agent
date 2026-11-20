@@ -12,6 +12,7 @@
     "import:csv": "tsx scripts/pilot.ts import",
     "weekly": "tsx scripts/pilot.ts weekly",
     "pilot": "tsx scripts/pilot.ts",
+    "demo:medspa": "npm ci --include=dev --no-audit --no-fund && tsx scripts/demo-medspa.ts",
     "scan": "tsx scripts/run-daily-scan.ts",
     "demo:ask": "tsx scripts/demo-query.ts",
     "mcp": "tsx scripts/mcp.ts",

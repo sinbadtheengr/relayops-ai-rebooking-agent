@@ -1,0 +1,5 @@
+client_id,customer_id,full_name,preferred_channel,email,phone,typical_return_days,vip,appointment_id,service_type,service_date,status,revenue_cents,booked_at,consent_basis,consent_at,consent_evidence,opted_out_at
+juniper-cove-sample,C101,Avery Chen,email,avery@example.test,,45,false,V101,Facial,2026-08-14,completed,12500,2026-08-14T13:30:00Z,express,2026-08-14T18:00:00Z,Signed rebooking email opt-in F-104 for avery@example.test,
+juniper-cove-sample,C102,Morgan Reed,sms,,(416) 555-0142,45,false,V102,Skin consultation,2026-08-19,completed,9500,2026-08-19T13:30:00Z,implied_purchase,2026-08-19T18:00:00Z,Paid service receipt R-208; customer supplied SMS number +14165550142,
+juniper-cove-sample,C103,Casey Bell,email,casey@example.test,,45,false,V103,Facial,2026-09-03,completed,14500,2026-09-03T13:30:00Z,express,2026-09-03T18:00:00Z,Signed rebooking email opt-in F-117 for casey@example.test,
+juniper-cove-sample,C104,Rowan Grey,email,rowan@example.test,,45,false,V104,Skin consultation,2026-08-08,completed,9500,2026-08-08T13:30:00Z,none,,,
