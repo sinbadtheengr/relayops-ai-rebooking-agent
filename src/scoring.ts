@@ -7,8 +7,8 @@ function classifyPriority(score: number): Priority {
   return "Low";
 }
 
-export function scoreCustomer(record: CustomerRecord): CustomerInsight {
-  const daysSinceLastVisit = daysBetween(record.lastVisitDate);
+export function scoreCustomer(record: CustomerRecord, day = todayIso()): CustomerInsight {
+  const daysSinceLastVisit = daysBetween(record.lastVisitDate, day);
   const daysOverdue = Math.max(0, daysSinceLastVisit - record.typicalReturnDays);
   const overdueRatio = daysOverdue / Math.max(record.typicalReturnDays, 1);
   const recencySignal = clamp(overdueRatio * 58, 0, 58);
@@ -22,7 +22,7 @@ export function scoreCustomer(record: CustomerRecord): CustomerInsight {
     clamp(0.22 + overdueRatio * 0.18 + record.appointmentCount * 0.025 + (record.vip ? 0.08 : 0), 0.12, 0.91).toFixed(2)
   );
   const estimatedRecoverableRevenueCents = Math.round(record.averageTicketCents * rebookingLikelihood);
-  const recommendedChannel = record.marketingConsent ? record.preferredChannel : "phone";
+  const recommendedChannel = record.preferredChannel;
 
   return {
     ...record,
@@ -39,7 +39,7 @@ export function scoreCustomer(record: CustomerRecord): CustomerInsight {
 
 export function rankOpportunities(records: CustomerRecord[]): CustomerInsight[] {
   return records
-    .map(scoreCustomer)
+    .map(record => scoreCustomer(record))
     .filter((customer) => customer.daysOverdue > 0)
     .sort((a, b) => {
       if (b.priorityScore !== a.priorityScore) return b.priorityScore - a.priorityScore;
@@ -62,8 +62,8 @@ export function summarizeOpportunities(opportunities: CustomerInsight[], recentl
     topOpportunities: opportunities.slice(0, 10),
     recommendedActions: [
       `Start with the top ${Math.min(high || 3, 5)} high-priority customers before noon.`,
-      "Use SMS for opted-in customers with short-cycle services; use phone follow-up for VIPs and customers without marketing consent.",
-      "After each outreach, log contacted customers so tomorrow's report focuses on fresh opportunities."
+      "Review and approve each draft before delivery.",
+      "Confirm each manual send and record replies and withdrawals."
     ]
   };
 }

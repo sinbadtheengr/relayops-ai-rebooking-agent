@@ -1,35 +1,44 @@
 import { config } from "./config.js";
 
 export function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0
-  }).format(cents / 100);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(cents / 100);
 }
 
 export function formatDate(date: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("en-CA", {
     month: "short",
     day: "numeric",
-    year: "numeric"
-  }).format(new Date(`${date}T12:00:00Z`));
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(date + "T12:00:00Z"));
 }
 
-export function todayIso(): string {
-  // "Today" is the business day in the configured timezone, not UTC (G-13):
-  // a UTC slice flips to tomorrow's date every evening in America/Toronto.
-  // en-CA formats as YYYY-MM-DD.
-  return new Intl.DateTimeFormat("en-CA", { timeZone: config.timezone }).format(new Date());
+const businessDate = new Intl.DateTimeFormat("en-CA", { timeZone: config.timezone });
+
+export function todayIso(at = new Date()): string {
+  return businessDate.format(at);
 }
 
 export function daysBetween(startIso: string, endIso = todayIso()): number {
-  const start = new Date(`${startIso}T12:00:00Z`).getTime();
-  const end = new Date(`${endIso}T12:00:00Z`).getTime();
-  return Math.max(0, Math.floor((end - start) / 86_400_000));
+  return Math.max(0, Math.floor((Date.parse(endIso) - Date.parse(startIso)) / 86_400_000));
+}
+
+export function shiftDay(day: string, count: number) {
+  return new Date(Date.parse(day) + count * 86_400_000).toISOString().slice(0, 10);
+}
+
+// Find the first instant of the local date, including weeks crossing DST.
+export function midnight(day: string) {
+  let low = Date.parse(day) - 86_400_000,
+    high = Date.parse(day) + 86_400_000;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (todayIso(new Date(mid)) < day) low = mid + 1;
+    else high = mid;
+  }
+  return new Date(low).toISOString();
 }
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
-

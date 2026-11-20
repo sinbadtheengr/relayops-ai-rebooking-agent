@@ -1,13 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { asActor } from "../actor.js";
 import {
   createOutreachDraft,
   getDailySummary,
   getInsight,
   getOpportunities,
-  listRecentlyContacted,
-  markCustomerContacted
+  listRecentlyContacted
 } from "../relayops.js";
 import { formatCurrency, formatDate } from "../utils.js";
 import type { CustomerInsight, Priority } from "../types.js";
@@ -37,7 +37,11 @@ function resolveCustomer(query: string): CustomerInsight | { error: string } {
   const match = getOpportunities({ includeContacted: true, limit: 1000 }).find((c) =>
     c.fullName.toLowerCase().includes(needle)
   );
-  return match ?? { error: `No customer matching "${query}". Use get_rebooking_opportunities to see valid ids and names.` };
+  return (
+    match ?? {
+      error: `No customer matching "${query}". Use get_rebooking_opportunities to see valid ids and names.`
+    }
+  );
 }
 
 export function createRelayOpsMcpServer(): McpServer {
@@ -54,23 +58,29 @@ export function createRelayOpsMcpServer(): McpServer {
         minDaysSinceLastVisit: z.number().int().nonnegative().optional(),
         minDaysOverdue: z.number().int().nonnegative().optional(),
         serviceType: z.string().optional(),
-        includeContacted: z.boolean().optional().describe("Include customers contacted within the cooldown window"),
+        includeContacted: z
+          .boolean()
+          .optional()
+          .describe("Include customers contacted within the cooldown window"),
         limit: z.number().int().min(1).max(25).optional().describe("1–25, default 8")
       }
     },
-    async (args) => {
-      const opportunities = getOpportunities({
-        priority: args.priority as Priority | undefined,
-        vipOnly: args.vipOnly,
-        minDaysSinceLastVisit: args.minDaysSinceLastVisit,
-        minDaysOverdue: args.minDaysOverdue,
-        serviceType: args.serviceType,
-        includeContacted: args.includeContacted,
-        limit: args.limit ?? 8
-      });
-      if (opportunities.length === 0) return text("No overdue customers match those filters.");
-      return text([`${opportunities.length} rebooking opportunities:`, ...opportunities.map(insightLine)].join("\n"));
-    }
+    async (args) =>
+      asActor("agent:mcp", () => {
+        const opportunities = getOpportunities({
+          priority: args.priority as Priority | undefined,
+          vipOnly: args.vipOnly,
+          minDaysSinceLastVisit: args.minDaysSinceLastVisit,
+          minDaysOverdue: args.minDaysOverdue,
+          serviceType: args.serviceType,
+          includeContacted: args.includeContacted,
+          limit: args.limit ?? 8
+        });
+        if (opportunities.length === 0) return text("No overdue customers match those filters.");
+        return text(
+          [`${opportunities.length} rebooking opportunities:`, ...opportunities.map(insightLine)].join("\n")
+        );
+      })
   );
 
   server.registerTool(
@@ -80,19 +90,20 @@ export function createRelayOpsMcpServer(): McpServer {
         "Snapshot of today's rebooking opportunity: overdue count, priority breakdown, total recoverable revenue, and how many customers were suppressed because they were recently contacted.",
       inputSchema: {}
     },
-    async () => {
-      const s = getDailySummary();
-      const lines = [
-        `RelayOps daily rebooking scan (${formatDate(s.generatedAt)}):`,
-        `- ${s.overdueCustomerCount} overdue customers (${s.highPriorityCount} high, ${s.mediumPriorityCount} medium)`,
-        `- Estimated recoverable revenue: ${formatCurrency(s.estimatedRecoverableRevenueCents)}`,
-        `- ${s.recentlyContactedCount} recently-contacted customers suppressed from this scan`,
-        "",
-        "Top opportunities:",
-        ...s.topOpportunities.slice(0, 5).map(insightLine)
-      ];
-      return text(lines.join("\n"));
-    }
+    async () =>
+      asActor("agent:mcp", () => {
+        const s = getDailySummary();
+        const lines = [
+          `RelayOps daily rebooking scan (${formatDate(s.generatedAt)}):`,
+          `- ${s.overdueCustomerCount} overdue customers (${s.highPriorityCount} high, ${s.mediumPriorityCount} medium)`,
+          `- Estimated recoverable revenue: ${formatCurrency(s.estimatedRecoverableRevenueCents)}`,
+          `- ${s.recentlyContactedCount} recently-contacted customers suppressed from this scan`,
+          "",
+          "Top opportunities:",
+          ...s.topOpportunities.slice(0, 5).map(insightLine)
+        ];
+        return text(lines.join("\n"));
+      })
   );
 
   server.registerTool(
@@ -105,14 +116,15 @@ export function createRelayOpsMcpServer(): McpServer {
         tone: z.string().optional().describe("Optional tone hint, e.g. warm, concise, celebratory")
       }
     },
-    async ({ customer, tone }) => {
-      const resolved = resolveCustomer(customer);
-      if ("error" in resolved) return text(resolved.error);
-      const draft = createOutreachDraft(resolved.id, tone);
-      return text(
-        `Draft for ${draft.customer.fullName} via ${draft.customer.recommendedChannel.toUpperCase()} (review before sending):\n\n${draft.message}`
-      );
-    }
+    async ({ customer, tone }) =>
+      asActor("agent:mcp", () => {
+        const resolved = resolveCustomer(customer);
+        if ("error" in resolved) return text(resolved.error);
+        const draft = createOutreachDraft(resolved.id, tone);
+        return text(
+          `Draft ${draft.id} for ${draft.customer.fullName}. Staff can review the copy below and approve it with /relayops approve ${draft.id}.\n\n${draft.message}`
+        );
+      })
   );
 
   server.registerTool(
@@ -122,29 +134,14 @@ export function createRelayOpsMcpServer(): McpServer {
         "List customers who were marked contacted within the cooldown window and are therefore suppressed from the daily scan.",
       inputSchema: {}
     },
-    async () => {
-      const suppressed = listRecentlyContacted();
-      if (suppressed.length === 0) return text("No customers have been contacted within the cooldown window.");
-      return text([`${suppressed.length} recently-contacted (suppressed):`, ...suppressed.map(insightLine)].join("\n"));
-    }
-  );
-
-  server.registerTool(
-    "mark_contacted",
-    {
-      description:
-        "Log that staff contacted a customer (INTERNAL LOG ONLY — does not message the customer). Suppresses them from the daily scan for the cooldown window. Accepts a customer id or name.",
-      inputSchema: {
-        customer: z.string().describe("Customer id (e.g. cus_004) or full name"),
-        note: z.string().optional().describe("Optional note about the outreach")
-      }
-    },
-    async ({ customer, note }) => {
-      const resolved = resolveCustomer(customer);
-      if ("error" in resolved) return text(resolved.error);
-      const updated = markCustomerContacted(resolved.id, note ?? "Marked contacted via MCP");
-      return text(`Logged ${updated.fullName} (id ${updated.id}) as contacted. They will drop out of the scan for the cooldown window.`);
-    }
+    async () =>
+      asActor("agent:mcp", () => {
+        const suppressed = listRecentlyContacted();
+        if (suppressed.length === 0) return text("No customers have been contacted within the cooldown window.");
+        return text(
+          [`${suppressed.length} recently-contacted (suppressed):`, ...suppressed.map(insightLine)].join("\n")
+        );
+      })
   );
 
   return server;

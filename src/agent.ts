@@ -37,11 +37,15 @@ export function formatDailySummaryText(): string {
       ? [`${summary.recentlyContactedCount} recently-contacted customers suppressed from this scan.`]
       : []),
     "",
-    top || "No overdue customers today.",
+    top || "No clients are eligible for outreach today.",
     "",
     "*Recommended actions:*",
     ...summary.recommendedActions.map((action) => `• ${action}`)
   ].join("\n");
+}
+
+function renderDraft(draft: ReturnType<typeof createOutreachDraft>) {
+  return `Draft for ${draft.customer.fullName} via ${draft.customer.recommendedChannel}\n\n${draft.message}\n\nTo approve this exact copy, use /relayops approve ${draft.id}.`;
 }
 
 function parseDeterministicIntent(question: string): string {
@@ -75,7 +79,7 @@ function parseDeterministicIntent(question: string): string {
     const top = getOpportunities({ priority: filters.priority, vipOnly: filters.vipOnly, limit: 1 })[0];
     if (!top) return "I did not find an overdue customer matching that request.";
     const draft = createOutreachDraft(top.id);
-    return `*Draft for ${draft.customer.fullName} via ${draft.customer.recommendedChannel}:*\n${draft.message}`;
+    return renderDraft(draft);
   }
 
   const opportunities = getOpportunities(filters);
@@ -238,10 +242,14 @@ export async function answerBusinessQuestion(question: string): Promise<string> 
 
       messages.push(message);
       for (const call of toolCalls) {
+        const result = runTool(call.function.name, call.function.arguments);
+        if (call.function.name === "draft_follow_up" && result && typeof result === "object" && "message" in result) {
+          return renderDraft(result as ReturnType<typeof createOutreachDraft>);
+        }
         messages.push({
           role: "tool",
           tool_call_id: call.id,
-          content: JSON.stringify(runTool(call.function.name, call.function.arguments))
+          content: JSON.stringify(result)
         });
       }
     }

@@ -1,241 +1,90 @@
-# RelayOps AI Rebooking Agent
+# RelayOps med-spa pilot
 
-RelayOps is a Slack-native AI employee for small businesses that lose revenue when customers do not return after their last appointment.
+RelayOps imports the spa’s booking CSV, finds overdue clients who can be contacted, and gives staff a private approval workflow in Slack. Staff deliver the approved copy through the spa’s existing email or SMS account and confirm the send. Booking and revenue outcomes come from subsequent booking exports.
 
-Every morning, RelayOps scans CRM and booking data, finds overdue customers, prioritizes the best recovery opportunities, drafts personalized outreach, and lets staff log follow-up work directly in Slack.
+## Set up one client
 
-## Why It Matters
+1. Install Node.js 22 LTS and run `npm ci`, `npm run build` and `npm test`.
+2. Use the settings in [.env.example](.env.example) to configure the deployment. Give the spa a stable lowercase `RELAYOPS_CLIENT_ID`, its business timezone and a dedicated `RELAYOPS_DATA_DIR` on persistent local storage. Configure the business name used when collecting consent, full mailing address and monitored contact email. The spa sends on its own behalf.
+3. Use one Slack workspace and app process per spa. Install the [Socket Mode manifest](manifest.json), supply its three Slack credentials, set `SLACK_TEAM_ID` to the workspace ID and list the individual authorized Slack users in `RELAYOPS_STAFF_IDS`. Use individual OS accounts for CLI operators as their usernames appear in the audit. Limit access to the data directory, booking files, backups and local MCP process to this spa’s operators.
+4. Map the spa’s export to the columns below. Verify the source records for its consent evidence, confirm that both email and SMS recipients can reply to unsubscribe at no cost on the accounts staff use, and identify the staff member monitoring incoming requests.
+5. Import the CSV, run a scan, then start the Slack process. Keep the process running for scheduled reports. The CLI works offline.
 
-Small businesses already paid to acquire these customers. The missing workflow is repeat-booking recovery:
-
-- Who is overdue?
-- Who is worth contacting first?
-- What should staff say?
-- How much revenue could be recovered?
-
-RelayOps answers those questions inside the tool staff already use.
-
-## MVP Features
-
-- Slack app using Bolt for JavaScript and agent-oriented Slack surfaces
-- **MCP server** exposing the same rebooking intelligence to any MCP client (Claude Desktop, IDEs) — runs credential-free
-- **App Home dashboard** with live KPIs (recoverable revenue, overdue count, high-priority, suppressed) and action buttons
-- `/relayops scan` daily rebooking report
-- App mention and DM natural-language questions
-- Suggested Assistant prompts, streaming responses, and thinking status (Slack AI-app surface)
-- 100-customer demo CRM and appointment dataset
-- Priority scoring by overdue gap, spend, loyalty, VIP status, and consent
-- **Closed follow-up loop**: customers marked contacted are suppressed from scans for a 14-day cooldown
-- AI function calling with OpenAI for grounded responses — multi-round tool chaining with zod-validated arguments
-- Deterministic fallback when `OPENAI_API_KEY` is not configured
-- Personalized SMS, email, and phone outreach drafts
-- Slack buttons for draft outreach and mark contacted
-- SQLite storage with a clean PostgreSQL upgrade path
-- Daily cron scheduling for morning reports
-- Automated test suite (`npm test`, Vitest) over scoring, filters, contact suppression, and the deterministic parser
-
-## Example Slack Questions
-
-- Which customers should we contact today?
-- Who has not returned in 90 days?
-- Show overdue VIP customers
-- Draft a follow-up message
-- Summarize today's opportunities
-- Who have we already contacted?
-
-## Tech Stack
-
-- TypeScript
-- Node.js
-- Slack Bolt for JavaScript
-- OpenAI GPT tool calling
-- SQLite via `better-sqlite3`
-- `node-cron` for scheduled scans
-
-## Slack Agent Builder Challenge Alignment
-
-**Track:** New Slack Agent.
-
-**Required technology (the challenge asks for at least one of three):**
-
-- ✅ **MCP server integration** — `src/mcp/server.ts` exposes RelayOps as five MCP tools over stdio (`@modelcontextprotocol/sdk`). The same domain service layer that powers the Slack app also powers the MCP server, so any MCP client gets identical, data-grounded answers. Runs with no OpenAI key.
-- ✅ **Slack AI capabilities** — Slack Agents & AI-Apps surface: assistant threads with suggested prompts, streaming markdown responses, and thinking-status updates.
-
-RelayOps is built for the **Slack Agent Builder Challenge** as a Slack-native agent experience. The core product lives where staff already work: Slack channels, DMs, slash commands, app mentions, the App Home tab, Block Kit actions, and human-in-the-loop review.
-
-Challenge fit:
-
-- **New Slack agent**: RelayOps acts as an AI employee for rebooking and revenue recovery.
-- **Slack-first UX**: staff can use `/relayops scan`, DM the app, mention it in a channel, and click action buttons.
-- **Agentic workflow**: the agent retrieves structured customer data, scores opportunities, recommends next actions, and drafts outreach.
-- **Human-in-the-loop control**: RelayOps drafts messages for staff review instead of sending customer outreach automatically.
-- **Business impact**: the demo turns overlooked customer follow-up into a measurable daily revenue workflow.
-
-Slack capabilities used:
-
-- Slack app manifest
-- Slack Bolt for JavaScript
-- Socket Mode for local demo delivery
-- Slash command: `/relayops`
-- App mention handling
-- App Home / DM message handling
-- Block Kit reports and action buttons
-- Ephemeral staff-only draft responses
-- Suggested assistant prompts for common rebooking questions
-
-## Coding Agent Usage
-
-This project was built with Codex as an AI-assisted coding agent. Codex helped scaffold the TypeScript Slack app, generate the SQLite demo dataset, implement scoring and fallback logic, create documentation, produce the pitch deck, and debug the Slack interaction flow. The generated code is meaningfully integrated into the working MVP rather than referenced only as documentation.
-
-## Judging Criteria Coverage
-
-Mapped to the four official criteria:
-
-- **Technological Implementation** — satisfies the required tech via an MCP server (and the Slack AI-app surface); clean layered architecture (adapters → agent → service → pure domain → single SQL module); AI is grounded in structured tools with a deterministic fallback; a Vitest suite (`npm test`) covers scoring, filters, contact suppression, and the parser.
-- **Design** — three Slack surfaces (slash command, App Home dashboard, conversational DM/mention) with Block Kit reports, KPI fields, and action buttons; a real frontend/backend blend, not a chat-only bot.
-- **Potential Impact** — every appointment-based SMB (salons, dental, physio, home services) loses revenue to un-rebooked customers; RelayOps quantifies and recovers it. The MCP server extends that intelligence beyond Slack to any AI client.
-- **Quality of the Idea** — not another generic chatbot: a grounded, human-in-the-loop revenue-recovery agent where every number traces to the database and the follow-up loop actually closes (contacted customers stop reappearing).
-
-## Quick Start
-
-```bash
-npm install
-cp .env.example .env
-npm run seed
+```powershell
+npm run import:csv -- north-spa "D:\secure\north-spa\bookings.csv" "2026-11-19T18:00:00-05:00"
 npm run scan
+npm start
 ```
 
-`npm run scan` works without Slack or OpenAI credentials and prints the daily recovery report.
+Set the example client slug to the same value in the environment and command. The third import argument is the timestamp of the export. Each client begins with an empty database. The legacy demo database and archived hackathon materials are separate from the pilot. Local Q&A uses templates by default. Enable the existing optional OpenAI Q&A only if the spa authorizes sending question and tool data to that service.
 
-Ask a local demo question:
+## CSV contract
 
-```bash
-npm run demo:ask -- "Show overdue VIP customers"
+Use UTF-8 with a header and one row per booking. Quoted commas, escaped double quotes, line breaks, Windows line endings and a UTF-8 BOM are supported. The importer ignores extra columns. Exclude clinical notes. An example row with fictional data follows.
+
+```csv
+client_id,customer_id,full_name,preferred_channel,email,phone,typical_return_days,vip,appointment_id,service_type,service_date,status,revenue_cents,booked_at,consent_basis,consent_at,consent_evidence,opted_out_at
+north-spa,C101,Avery Example,email,avery@example.test,,60,false,B501,Return visit,2026-08-03,completed,12500,2026-07-27T15:00:00Z,express,2026-07-27T15:05:00Z,Reception opt-in form F19 for rebooking emails,
 ```
 
-## Slack Setup
+| Fields | Meaning |
+| --- | --- |
+| `customer_id`, `appointment_id` | Required stable IDs from the booking system. Each booking belongs to one customer for its lifetime. |
+| `full_name`, `preferred_channel`, `typical_return_days` | Required customer profile. Channel accepts `email`, `sms` or `phone`. The rebooking cycle is a positive whole number of days. A phone-call preference stays outside electronic outreach. |
+| `email`, `phone`, `vip` | Include a valid destination for the chosen channel. Canadian 10-digit numbers normalize to +1. Use international format for other SMS numbers. VIP accepts `true`, `false` or blank. |
+| `service_type`, `service_date`, `status`, `revenue_cents` | Required. Date is the local service day in YYYY-MM-DD. Status accepts `scheduled`, `completed`, `cancelled` or `no_show`. Supply nonnegative integer CAD cents. For completed visits use actual collected service revenue net of refunds. |
+| `booked_at` | Actual booking creation timestamp with timezone. A blank value excludes the booking from attribution while preserving visit history. |
+| `consent_basis`, `consent_at`, `consent_evidence` | Supply `express`, `implied_purchase` or `implied_inquiry` with a dated basis and evidence reference. The evidence must identify how this spa can send rebooking messages to this specific destination. For implied consent, supply the qualifying transaction or inquiry time and its source record. Blank or `none` suppresses outreach. |
+| `opted_out_at` | Actual withdrawal timestamp with timezone. Import applies it immediately and retains it across later imports. |
+| `client_id` | Optional per-row spa slug. When present, every row must match the configured client and command argument. |
 
-1. Create a Slack app from `manifest.json`.
-2. Enable Socket Mode.
-3. Create an app-level token with `connections:write`.
-4. Install the app to your workspace.
-5. Copy credentials into `.env`:
+For all rows sharing a customer ID, repeat the same current profile and consent fields. A malformed row or conflicting duplicate rejects the entire file. The importer records the file’s SHA-256 digest, export time, load time and operator. Replaying the same file and export timestamp is idempotent. Later exports update matching IDs and preserve history. Omitted bookings retain their last status, so include explicit cancellations, no-shows and corrections. Import fresh exports before staff start outreach.
 
-```bash
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-SLACK_SIGNING_SECRET=...
+## Staff delivery and withdrawals
+
+| Staff action | Slack command |
+| --- | --- |
+| View private opportunities | `/relayops scan` |
+| Review the exact message | Click **Draft outreach** or use `/relayops draft CUSTOMER_ID`. |
+| Approve | Click **Approve this text** or use `/relayops approve MESSAGE_ID` after review. |
+| Claim a delivery | Immediately before sending, check the monitored inbox for withdrawals and run `/relayops deliver MESSAGE_ID`. The command rechecks eligibility and shows the destination and approved copy. |
+| Confirm a manual send | Send the exact text once through the spa’s existing account. Run `/relayops sent MESSAGE_ID` immediately. For a delayed entry, append the actual ISO delivery timestamp. |
+| Close an unsent draft | `/relayops cancel MESSAGE_ID`. Only the staff member holding a delivery can release that hold. After a crash, verify the spa’s sent history before resuming. |
+| Log an inbound reply | `/relayops reply MESSAGE_ID reply INBOX_REFERENCE RECEIVED_AT`. Use a stable, client-wide reference such as a mailbox name plus its message ID. |
+| Log an unsubscribe reply | `/relayops reply MESSAGE_ID optout INBOX_REFERENCE RECEIVED_AT`. This records the reply and withdrawal together. |
+| Record a withdrawal through any other route | `/relayops optout CUSTOMER_ID RECEIVED_AT SOURCE`, for example `/relayops optout C101 2026-11-19T20:15:00Z verbal request at reception`. |
+
+Process every withdrawal immediately, including requests expressed in the recipient’s own words. Staff classify replies in the monitored inbox. Keep the contact information and unsubscribe mechanism valid for at least 60 days after sending. CASL requires processing requests without delay and within 10 business days. Keep the underlying forms, receipts or inquiry records referenced by the export with the spa’s controlled records. [CRTC guidance on consent and records](https://crtc.gc.ca/eng/com500/guide.htm) · [CRTC identification and unsubscribe FAQ](https://crtc.gc.ca/eng/com500/faq500.htm)
+
+An overdue customer needs a completed visit, a gap greater than their return cycle and no scheduled visit today or later. Outreach also requires evidence, a usable destination and an available recipient. A withdrawal suppresses the customer and matched destinations across imports. The pilot keeps withdrawals in force. Express consent has no expiry while valid. Purchase and inquiry consent expire at the start of the local anniversary day after 24 and 6 calendar months respectively. A confirmed send starts a 14-day cooldown.
+
+The store keeps the draft body, template version, SHA-256 text hash, destination, business identity and consent evidence. Staff approval, delivery handoff and send confirmation each record the actor, timestamp and checked consent and suppression state. Profile or copy changes require fresh review. The sender’s handoff survives a restart and prevents a competing claim.
+
+## Weekly recovery report
+
+Run `npm run weekly` or `/relayops weekly` for the last complete Monday–Sunday week. Append a local Monday such as `2026-11-16` to choose another week. The current week shows progress to date. The running app generates the previous week’s report every Monday at 08:00 in the configured timezone and retains the result in the audit log. Setting `SLACK_REPORT_CHANNEL_ID` also posts the totals to the existing staff channel. Run the CLI for a missed week after downtime.
+
+| Measure | Counting rule |
+| --- | --- |
+| Overdue clients | Distinct overdue customers at week end, reconstructed from export versions. |
+| Clients we can contact | The overdue subset with eligible consent and destination, after withdrawals, active handoffs and cooldowns. |
+| Drafts approved | First staff approval for each draft during the week. |
+| Messages sent | Staff-confirmed manual deliveries by actual send time. |
+| Replies | Distinct recorded inbound references by received time, including unsubscribe replies. |
+| Bookings | Distinct active or completed appointments created strictly after a confirmed send to that customer and within 30 days of it, counted in the booking creation week. |
+| Recovered revenue | Actual collected cents on those attributed completed appointments, counted in their service week. |
+
+The 30-day window is the pilot’s attribution assumption. A booking counts once even when more than one send qualifies. Cancellations and corrections in later exports can revise historical totals. Each generation retains the figures shown at that time. Daily scoring estimates are separate from weekly collected revenue.
+
+## Records and backup
+
+```powershell
+npm run pilot -- record MESSAGE_ID
+npm run pilot -- audit
 ```
 
-6. Start the app:
+The same trusted CLI supports the staff verbs in the table. Slack actors are identified by user ID inside the bound workspace. CLI actors are identified by OS login. The local MCP tools can read opportunities and create drafts for review.
 
-```bash
-npm run dev
-```
+Each client has a SQLite file named `client-CLIENT_ID.sqlite` with WAL journaling, transactions, foreign keys and append-only record history. The database binds the client ID, timezone, configured sender name and Slack workspace. Use an encrypted persistent disk and separate OS permissions for each deployment. Store exports and backups outside source control.
 
-7. Invite RelayOps to a channel or DM the app.
-8. Run `/relayops scan`.
-
-For a public HTTP install flow, expose the app through ngrok and replace the placeholder URLs in `manifest.json`. Socket Mode is enabled for the MVP so local development does not require a public request URL for event delivery.
-
-## OpenAI Setup
-
-OpenAI is optional for local demos. Without `OPENAI_API_KEY`, RelayOps uses deterministic templates over the same scored data.
-
-To enable GPT function calling:
-
-```bash
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-```
-
-The agent is instructed to call tools for all customer facts. It should not invent customers or revenue estimates.
-
-## MCP Server (Model Context Protocol)
-
-RelayOps runs as an MCP server so any MCP client can query the same rebooking intelligence the Slack app uses. It needs **no Slack or OpenAI credentials** — it seeds the local demo data on first run.
-
-Run it directly:
-
-```bash
-npm run mcp
-```
-
-Connect it to **Claude Desktop** — add this to `claude_desktop_config.json` (replace the path with your checkout):
-
-```jsonc
-{
-  "mcpServers": {
-    "relayops": {
-      "command": "npx",
-      "args": ["tsx", "scripts/mcp.ts"],
-      "cwd": "/absolute/path/to/relayops-ai-rebooking-agent"
-    }
-  }
-}
-```
-
-Then ask Claude things like *"Summarize today's RelayOps rebooking opportunities"* or *"Draft a follow-up for the most overdue VIP."*
-
-Tools exposed (all read-only except an internal contact log — RelayOps never messages customers):
-
-| Tool | Purpose |
-|---|---|
-| `get_rebooking_opportunities` | Ranked overdue customers, filterable by priority/VIP/service/days |
-| `summarize_today` | Daily recoverable-revenue snapshot |
-| `draft_follow_up` | Personalized outreach draft for staff review (by id or name) |
-| `list_recently_contacted` | Customers currently suppressed by the cooldown |
-| `mark_contacted` | Log staff contact (internal only), suppressing the customer from scans |
-
-## Daily Scan
-
-Enable scheduled Slack reports:
-
-```bash
-DAILY_SCAN_ENABLED=true
-SLACK_REPORT_CHANNEL_ID=C0123456789
-DAILY_SCAN_CRON=0 8 * * 1-6
-TIMEZONE=America/Toronto
-```
-
-## Project Structure
-
-```text
-src/
-  app.ts            Slack app runtime (slash command, DM, mention, App Home, actions)
-  agent.ts          AI tool-calling and deterministic fallback
-  db.ts             SQLite schema and repository functions
-  demoData.ts       100-customer dataset generator
-  mcp/server.ts     MCP server (adapter over the service layer)
-  outreach.ts       Personalized outreach drafts
-  relayops.ts       Product-domain service layer
-  scheduler.ts      Daily Slack report cron
-  scoring.ts        Rebooking priority model
-  slackBlocks.ts    Slack Block Kit views (report, App Home, drafts)
-scripts/
-  mcp.ts            MCP server entry point (npm run mcp)
-test/               Vitest suite (scoring, filters, suppression, parser)
-docs/
-  architecture.md
-  demo-script.md
-  pitch-deck-outline.md
-  video-script.md
-```
-
-## Production Readiness Notes
-
-- Replace `src/db.ts` with a PostgreSQL repository and keep the service interfaces intact.
-- Add tenant isolation before connecting multiple businesses.
-- Add booking connectors for Square, Fresha, Mindbody, Jane, Jobber, ServiceTitan, and CSV imports.
-- Add consent and opt-out enforcement per channel.
-- Add audit logs around AI drafts, staff actions, and customer outreach.
-- Add RAG over customer notes, staff playbooks, service policies, and campaign history.
-
-## Hackathon Deliverables
-
-- Working Slack app: `src/app.ts`, `manifest.json`
-- Agent architecture diagram: `docs/architecture.md`
-- README and setup instructions: this file
-- Demo script: `docs/demo-script.md`
-- Pitch deck outline: `docs/pitch-deck-outline.md`
-- 2-minute demo video script: `docs/video-script.md`
+For a live backup, use SQLite’s online backup command on the client database, for example `sqlite3 client-north-spa.sqlite ".backup north-spa-backup.sqlite"` from its data directory. Move the backup to the spa’s protected backup location. To verify recovery, restore the backup under the original database filename in a separate directory, point a CLI process at that directory with the same client settings, run `PRAGMA integrity_check` with SQLite, and compare a known message record and weekly report. Keep audit, proof and source records according to the spa’s retention policy.

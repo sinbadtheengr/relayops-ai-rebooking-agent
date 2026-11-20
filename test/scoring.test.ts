@@ -34,11 +34,11 @@ describe("scoreCustomer", () => {
     expect(vip.priorityScore - base.priorityScore).toBe(8);
   });
 
-  it("penalizes missing marketing consent and routes to phone", () => {
+  it("penalizes missing marketing consent without switching channels", () => {
     const withConsent = scoreCustomer(record({ marketingConsent: true, preferredChannel: "sms" }));
     const noConsent = scoreCustomer(record({ marketingConsent: false, preferredChannel: "sms" }));
     expect(withConsent.priorityScore - noConsent.priorityScore).toBe(12);
-    expect(noConsent.recommendedChannel).toBe("phone");
+    expect(noConsent.recommendedChannel).toBe("sms");
   });
 
   it("clamps the recency signal (very overdue customer never exceeds 100)", () => {

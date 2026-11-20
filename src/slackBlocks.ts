@@ -8,7 +8,7 @@ function priorityEmoji(priority: string): string {
   return ":large_green_circle:";
 }
 
-export function customerBlocks(customer: CustomerInsight): KnownBlock[] {
+export function customerBlocks(customer: CustomerInsight, clientId: string): KnownBlock[] {
   return [
     {
       type: "section",
@@ -24,7 +24,7 @@ export function customerBlocks(customer: CustomerInsight): KnownBlock[] {
       elements: [
         {
           type: "mrkdwn",
-          text: `Last visit ${formatDate(customer.lastVisitDate)} · ${customer.lastServiceType} · ${customer.appointmentCount} completed visits · ${customer.vip ? "VIP" : "Standard"}`
+          text: `Customer ID ${customer.id} · Last visit ${formatDate(customer.lastVisitDate)} · ${customer.lastServiceType} · ${customer.appointmentCount} completed visits · ${customer.vip ? "VIP" : "Standard"}`
         }
       ]
     },
@@ -35,14 +35,7 @@ export function customerBlocks(customer: CustomerInsight): KnownBlock[] {
           type: "button",
           text: { type: "plain_text", text: "Draft outreach" },
           action_id: "draft_customer",
-          value: customer.id
-        },
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Mark contacted" },
-          style: "primary",
-          action_id: "mark_contacted",
-          value: customer.id
+          value: `${clientId}/${customer.id}`
         }
       ]
     }
@@ -59,7 +52,7 @@ function summaryHeadline(summary: DailySummary): string {
     : base;
 }
 
-export function dailySummaryBlocks(summary: DailySummary): KnownBlock[] {
+export function dailySummaryBlocks(summary: DailySummary, clientId: string): KnownBlock[] {
   const blocks: KnownBlock[] = [
     {
       type: "header",
@@ -73,7 +66,7 @@ export function dailySummaryBlocks(summary: DailySummary): KnownBlock[] {
   ];
 
   for (const customer of summary.topOpportunities.slice(0, 5)) {
-    blocks.push(...customerBlocks(customer), { type: "divider" });
+    blocks.push(...customerBlocks(customer, clientId), { type: "divider" });
   }
 
   blocks.push({
@@ -91,7 +84,7 @@ export function dailySummaryBlocks(summary: DailySummary): KnownBlock[] {
  * App Home dashboard: a persistent, per-user view of today's rebooking opportunities.
  * Pure function of a DailySummary — the caller fetches the data (keeps the view layer I/O-free).
  */
-export function homeDashboardBlocks(summary: DailySummary): KnownBlock[] {
+export function homeDashboardBlocks(summary: DailySummary, clientId: string): KnownBlock[] {
   const blocks: KnownBlock[] = [
     {
       type: "header",
@@ -130,13 +123,13 @@ export function homeDashboardBlocks(summary: DailySummary): KnownBlock[] {
   if (summary.topOpportunities.length === 0) {
     blocks.push({
       type: "section",
-      text: { type: "mrkdwn", text: ":tada: No overdue customers right now — everyone is on cycle." }
+      text: { type: "mrkdwn", text: "No clients are eligible for rebooking outreach right now." }
     });
     return blocks;
   }
 
   for (const customer of summary.topOpportunities.slice(0, 5)) {
-    blocks.push(...customerBlocks(customer), { type: "divider" });
+    blocks.push(...customerBlocks(customer, clientId), { type: "divider" });
   }
 
   blocks.push({
@@ -147,14 +140,14 @@ export function homeDashboardBlocks(summary: DailySummary): KnownBlock[] {
   return blocks;
 }
 
-export function outreachDraftBlocks(draft: { customer: CustomerInsight; message: string }): KnownBlock[] {
+export function outreachDraftBlocks(draft: { id: string; customer: CustomerInsight; message: string }, clientId: string): KnownBlock[] {
   const { customer, message } = draft;
   return [
     {
       type: "section",
       text: {
-        type: "mrkdwn",
-        text: `*Draft for ${customer.fullName} via ${customer.recommendedChannel.toUpperCase()}*\n${message}`
+        type: "plain_text",
+        text: `Draft ${draft.id} for ${customer.fullName} via ${customer.recommendedChannel.toUpperCase()}\n\n${message}`
       }
     },
     {
@@ -162,10 +155,10 @@ export function outreachDraftBlocks(draft: { customer: CustomerInsight; message:
       elements: [
         {
           type: "button",
-          text: { type: "plain_text", text: "Mark contacted" },
+          text: { type: "plain_text", text: "Approve this text" },
           style: "primary",
-          action_id: "mark_contacted",
-          value: customer.id
+          action_id: "approve_message",
+          value: `${clientId}/${draft.id}`
         }
       ]
     }

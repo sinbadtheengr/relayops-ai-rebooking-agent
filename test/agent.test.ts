@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { seedDemoData } from "../src/demoData.js";
+import { four, sent } from "./fixtures.js";
 import { answerBusinessQuestion } from "../src/agent.js";
-import { getOpportunities, markCustomerContacted } from "../src/relayops.js";
+import { getOpportunities } from "../src/relayops.js";
 
 // With OPENAI_API_KEY unset (see test/setup.ts), answerBusinessQuestion routes
 // through the deterministic parser — this exercises parseDeterministicIntent.
 beforeAll(() => {
-  seedDemoData();
+  four();
 });
 
 describe("deterministic agent routing", () => {
@@ -27,7 +27,7 @@ describe("deterministic agent routing", () => {
 
   it("routes 'already contacted' questions to the suppressed list, not the to-contact list", async () => {
     const target = getOpportunities({ limit: 1 })[0];
-    markCustomerContacted(target.id, "test contact");
+    sent(target.id);
     const answer = await answerBusinessQuestion("Who have we already contacted?");
     expect(answer).toContain("Recently contacted");
     expect(answer).toContain(target.fullName);

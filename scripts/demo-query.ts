@@ -1,12 +1,5 @@
-import { seedDemoData } from "../src/demoData.js";
-import { listCustomerRecords } from "../src/db.js";
 import { answerBusinessQuestion } from "../src/agent.js";
-
+import { audit } from "../src/relayops.js";
 const question = process.argv.slice(2).join(" ") || "Which customers should we contact today?";
-
-if (listCustomerRecords().length === 0) {
-  seedDemoData();
-}
-
+audit("question");
 console.log(await answerBusinessQuestion(question));
-

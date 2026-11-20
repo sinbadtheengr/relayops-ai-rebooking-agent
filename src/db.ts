@@ -1,207 +1,284 @@
 import Database from "better-sqlite3";
-import fs from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { actorId } from "./actor.js";
 import { config } from "./config.js";
-import type { CommunicationChannel, Customer, CustomerRecord } from "./types.js";
+import type { Booking, Profile, parseExport } from "./importCsv.js";
 
-let db: Database.Database | null = null;
+let connection: Database.Database | undefined;
 
-export function getDb(): Database.Database {
-  if (db) return db;
-  const dbPath = config.databaseUrl.replace(/^sqlite:\/\//, "");
-  const dir = path.dirname(dbPath);
-  if (dir && dir !== ".") fs.mkdirSync(dir, { recursive: true });
-  db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  // SQLite ignores REFERENCES clauses unless this is set per connection (G-10).
-  db.pragma("foreign_keys = ON");
-  migrate(db);
-  return db;
+export function getDb() {
+  if (connection) return connection;
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(config.clientId))
+    throw new Error("Set RELAYOPS_CLIENT_ID to a lowercase client slug.");
+  mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
+  const db = new Database(path.resolve(config.dataDir, "client-" + config.clientId + ".sqlite"));
+  try {
+    db.pragma("foreign_keys = ON");
+    db.pragma("journal_mode = WAL");
+    db.pragma("synchronous = FULL");
+    db.transaction(() => {
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").pluck().all();
+      if (tables.length && !tables.includes("client_settings"))
+        throw new Error("Unrecognized database. Use a dedicated pilot directory.");
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS client_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS imports(id INTEGER PRIMARY KEY, as_of TEXT UNIQUE NOT NULL, digest TEXT NOT NULL,
+          loaded_at TEXT NOT NULL, actor TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS profiles(id TEXT NOT NULL, batch INTEGER NOT NULL REFERENCES imports, body TEXT NOT NULL,
+          PRIMARY KEY(id,batch));
+        CREATE TABLE IF NOT EXISTS bookings(id TEXT NOT NULL, batch INTEGER NOT NULL REFERENCES imports, body TEXT NOT NULL,
+          PRIMARY KEY(id,batch));
+        CREATE TABLE IF NOT EXISTS withdrawals(id INTEGER PRIMARY KEY, customer TEXT NOT NULL, email TEXT NOT NULL,
+          phone TEXT NOT NULL, effective_at TEXT NOT NULL, recorded_at TEXT NOT NULL, actor TEXT NOT NULL, source TEXT NOT NULL,
+          message_id TEXT REFERENCES messages, UNIQUE(customer,email,phone,effective_at,source));
+        CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY, customer TEXT NOT NULL, channel TEXT NOT NULL,
+          destination TEXT NOT NULL, body TEXT NOT NULL, template TEXT NOT NULL, hash TEXT NOT NULL, sender TEXT NOT NULL,
+          created_at TEXT NOT NULL, creator TEXT NOT NULL, evidence TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS message_events(message_id TEXT NOT NULL REFERENCES messages, kind TEXT NOT NULL,
+          at TEXT NOT NULL, actor TEXT NOT NULL, evidence TEXT NOT NULL, PRIMARY KEY(message_id,kind));
+        CREATE INDEX IF NOT EXISTS event_times ON message_events(kind,at);
+        CREATE TABLE IF NOT EXISTS replies(reference TEXT NOT NULL, message_id TEXT NOT NULL REFERENCES messages,
+          received_at TEXT NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY(message_id,reference));
+        CREATE UNIQUE INDEX IF NOT EXISTS reply_reference ON replies(reference);
+        CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, at TEXT NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL,
+          target TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT NOT NULL);
+      `);
+      for (const table of [
+        "imports",
+        "profiles",
+        "bookings",
+        "messages",
+        "message_events",
+        "withdrawals",
+        "replies",
+        "audit",
+        "client_settings"
+      ]) {
+        for (const op of ["UPDATE", "DELETE"]) {
+          db.exec(`CREATE TRIGGER IF NOT EXISTS immutable_${table}_${op} BEFORE ${op} ON ${table}
+            BEGIN SELECT RAISE(ABORT,'Pilot records are append-only'); END;`);
+        }
+      }
+      bind(db, "client", config.clientId);
+      bind(db, "timezone", config.timezone);
+      if (config.senderName) bind(db, "sender", config.senderName);
+      if (config.teamId) bind(db, "slack_team", config.teamId);
+    }).immediate();
+    connection = db;
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
-export function migrate(database = getDb()): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS customers (
-      id TEXT PRIMARY KEY,
-      full_name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      phone TEXT NOT NULL,
-      business_type TEXT NOT NULL,
-      preferred_channel TEXT NOT NULL,
-      vip INTEGER NOT NULL,
-      typical_return_days INTEGER NOT NULL,
-      total_spend_cents INTEGER NOT NULL,
-      average_ticket_cents INTEGER NOT NULL,
-      marketing_consent INTEGER NOT NULL,
-      notes TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS appointments (
-      id TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL REFERENCES customers(id),
-      service_type TEXT NOT NULL,
-      service_date TEXT NOT NULL,
-      revenue_cents INTEGER NOT NULL,
-      staff_member TEXT NOT NULL,
-      status TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS outreach_logs (
-      id TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL REFERENCES customers(id),
-      channel TEXT NOT NULL,
-      message TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_appointments_customer_date ON appointments(customer_id, service_date DESC);
-    CREATE INDEX IF NOT EXISTS idx_outreach_customer_date ON outreach_logs(customer_id, created_at DESC);
-  `);
+function bind(db: Database.Database, key: string, value: string) {
+  db.prepare("INSERT INTO client_settings VALUES (?,?) ON CONFLICT(key) DO NOTHING").run(key, value);
+  if (db.prepare("SELECT value FROM client_settings WHERE key=?").pluck().get(key) !== value) {
+    throw new Error("Pilot database identity or timezone mismatch.");
+  }
 }
 
-interface CustomerRow {
-  id: string;
-  full_name: string;
-  email: string;
-  phone: string;
-  business_type: string;
-  preferred_channel: CommunicationChannel;
-  vip: 0 | 1;
-  typical_return_days: number;
-  total_spend_cents: number;
-  average_ticket_cents: number;
-  marketing_consent: 0 | 1;
-  notes: string;
-  created_at: string;
+export function closeDb() {
+  connection?.close();
+  connection = undefined;
 }
 
-interface CustomerRecordRow extends CustomerRow {
-  last_visit_date: string;
-  last_service_type: string;
-  appointment_count: number;
+export function audit(action: string, target = "", outcome = "ok", detail = "") {
+  getDb()
+    .prepare("INSERT INTO audit(at,actor,action,target,outcome,detail) VALUES (?,?,?,?,?,?)")
+    .run(new Date().toISOString(), actorId(), action, target, outcome, detail);
 }
 
-function mapCustomer(row: CustomerRow): Customer {
+// The success log commits with the work. Failures roll back first, then record the rejection.
+export function action<T>(name: string, target: string, work: () => T): T {
+  try {
+    return getDb()
+      .transaction(() => {
+        const result = work();
+        audit(name, target);
+        return result;
+      })
+      .immediate();
+  } catch (error) {
+    audit(name, target, "failed", (error as Error).message);
+    throw error;
+  }
+}
+
+export function auditTrail() {
+  return action("audit.read", "", () => getDb().prepare("SELECT * FROM audit ORDER BY id").all());
+}
+
+function versions<T>(table: "profiles" | "bookings", at: string): Array<{ batch: number; value: T }> {
+  const rows = getDb()
+    .prepare(
+      `SELECT v.batch,v.body FROM ${table} v JOIN (
+    SELECT ${table}.id,max(batch) batch FROM ${table} JOIN imports ON imports.id=${table}.batch
+    WHERE imports.as_of <= ? GROUP BY ${table}.id
+  ) latest ON latest.id=v.id AND latest.batch=v.batch`
+    )
+    .all(at) as { batch: number; body: string }[];
+  return rows.map((r) => ({ batch: r.batch, value: JSON.parse(r.body) as T }));
+}
+
+export function loadState(at: string) {
   return {
-    id: row.id,
-    fullName: row.full_name,
-    email: row.email,
-    phone: row.phone,
-    businessType: row.business_type,
-    preferredChannel: row.preferred_channel,
-    vip: row.vip === 1,
-    typicalReturnDays: row.typical_return_days,
-    totalSpendCents: row.total_spend_cents,
-    averageTicketCents: row.average_ticket_cents,
-    marketingConsent: row.marketing_consent === 1,
-    notes: row.notes,
-    createdAt: row.created_at
+    profiles: versions<Profile>("profiles", at),
+    bookings: versions<Booking>("bookings", at).map((r) => r.value),
+    withdrawals: getDb().prepare("SELECT * FROM withdrawals WHERE effective_at<=?").all(at) as Withdrawal[],
+    holds: getDb()
+      .prepare(
+        `SELECT m.id,m.customer,m.destination,h.at FROM messages m JOIN message_events h
+      ON h.message_id=m.id AND h.kind='released' AND h.at<=? WHERE NOT EXISTS
+      (SELECT 1 FROM message_events e WHERE e.message_id=m.id AND e.kind IN ('sent','cancelled') AND e.at<=?)`
+      )
+      .all(at, at) as { id: string; customer: string; destination: string; at: string }[],
+    sends: getDb()
+      .prepare(
+        `SELECT m.customer,m.destination,e.at FROM messages m JOIN message_events e
+      ON m.id=e.message_id WHERE e.kind='sent' AND e.at<=?`
+      )
+      .all(at) as { customer: string; destination: string; at: string }[]
   };
 }
 
-export function listCustomerRecords(): CustomerRecord[] {
-  const rows = getDb()
+export function saveExport(data: ReturnType<typeof parseExport>, asOf: string, digest: string) {
+  const db = getDb();
+  const last = db.prepare("SELECT id,as_of,digest FROM imports ORDER BY id DESC LIMIT 1").get() as
+    | { id: number; as_of: string; digest: string }
+    | undefined;
+  const existing = db.prepare("SELECT id FROM imports WHERE as_of=? AND digest=?").pluck().get(asOf, digest);
+  if (existing) return { batch: Number(existing), profiles: 0, bookings: 0, duplicate: true };
+  if (last && asOf <= last.as_of) throw new Error("Export timestamp must be newer than the last accepted export.");
+  const batch = Number(
+    db
+      .prepare("INSERT INTO imports(as_of,digest,loaded_at,actor) VALUES (?,?,?,?)")
+      .run(asOf, digest, new Date().toISOString(), actorId()).lastInsertRowid
+  );
+  function save<T extends Profile | Booking>(table: "profiles" | "bookings", items: Map<string, T>) {
+    const previous = db.prepare(`SELECT body FROM ${table} WHERE id=? ORDER BY batch DESC LIMIT 1`).pluck();
+    const insert = db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`);
+    let count = 0;
+    for (const item of items.values()) {
+      const old = previous.get(item.id) as string | undefined;
+      const body = JSON.stringify(item);
+      if (old === body) continue;
+      if ("customerId" in item && old && JSON.parse(old).customerId !== item.customerId)
+        throw new Error("Booking ID belongs to another customer.");
+      insert.run(item.id, batch, body);
+      audit(table === "bookings" ? "booking.imported" : "profile.imported", item.id, "ok", String(batch));
+      count++;
+    }
+    return count;
+  }
+  const profiles = save("profiles", data.profiles);
+  const bookings = save("bookings", data.bookings);
+  for (const [id, times] of data.withdrawals) {
+    for (const at of times) withdraw(data.profiles.get(id)!, at, "csv", null);
+  }
+  return { batch, profiles, bookings, duplicate: false };
+}
+
+interface Withdrawal {
+  customer: string;
+  email: string;
+  phone: string;
+  effective_at: string;
+}
+export function withdraw(
+  p: Pick<Profile, "id" | "email" | "phone">,
+  at: string,
+  source: string,
+  messageId: string | null
+) {
+  const result = getDb()
     .prepare(
-      `
-      SELECT
-        c.*,
-        latest.service_date AS last_visit_date,
-        latest.service_type AS last_service_type,
-        COUNT(a.id) AS appointment_count
-      FROM customers c
-      JOIN appointments latest
-        ON latest.id = (
-          SELECT id FROM appointments
-          WHERE customer_id = c.id AND status = 'completed'
-          ORDER BY service_date DESC
-          LIMIT 1
-        )
-      JOIN appointments a ON a.customer_id = c.id AND a.status = 'completed'
-      GROUP BY c.id
-      ORDER BY latest.service_date ASC
-      `
+      `INSERT INTO withdrawals(customer,email,phone,effective_at,recorded_at,actor,source,message_id)
+    VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(customer,email,phone,effective_at,source) DO NOTHING`
     )
-    .all() as CustomerRecordRow[];
-
-  return rows.map((row) => ({
-    ...mapCustomer(row),
-    lastVisitDate: row.last_visit_date,
-    lastServiceType: row.last_service_type,
-    appointmentCount: row.appointment_count
-  }));
+    .run(p.id, p.email, p.phone, at, new Date().toISOString(), actorId(), source, messageId);
+  if (result.changes) audit("withdrawal.recorded", p.id, "ok", JSON.stringify({ at, source, messageId }));
 }
 
-export function getCustomerRecord(customerId: string): CustomerRecord | undefined {
-  return listCustomerRecords().find((customer) => customer.id === customerId);
-}
-
-/** Customer ids logged as contacted at or after `sinceIso`. Used to suppress recently-contacted customers from scans (G-01). */
-export function getRecentlyContactedCustomerIds(sinceIso: string): Set<string> {
-  const rows = getDb()
-    .prepare(`SELECT DISTINCT customer_id FROM outreach_logs WHERE status = 'contacted' AND created_at >= ?`)
-    .all(sinceIso) as Array<{ customer_id: string }>;
-  return new Set(rows.map((row) => row.customer_id));
-}
-
-export function insertCustomer(customer: Customer): void {
-  getDb()
-    .prepare(
-      `
-      INSERT INTO customers (
-        id, full_name, email, phone, business_type, preferred_channel, vip,
-        typical_return_days, total_spend_cents, average_ticket_cents,
-        marketing_consent, notes, created_at
-      ) VALUES (
-        @id, @fullName, @email, @phone, @businessType, @preferredChannel, @vip,
-        @typicalReturnDays, @totalSpendCents, @averageTicketCents,
-        @marketingConsent, @notes, @createdAt
-      )
-      `
-    )
-    .run({ ...customer, vip: customer.vip ? 1 : 0, marketingConsent: customer.marketingConsent ? 1 : 0 });
-}
-
-export function insertAppointment(input: {
+export interface Message {
   id: string;
-  customerId: string;
-  serviceType: string;
-  serviceDate: string;
-  revenueCents: number;
-  staffMember: string;
-  status: "completed" | "cancelled" | "no_show";
-}): void {
+  customer: string;
+  channel: string;
+  destination: string;
+  body: string;
+  template: string;
+  hash: string;
+  sender: string;
+  created_at: string;
+  creator: string;
+  evidence: string;
+}
+export function insertMessage(fields: Omit<Message, "id" | "created_at" | "creator">) {
+  const row = { ...fields, id: randomUUID(), created_at: new Date().toISOString(), creator: actorId() };
   getDb()
     .prepare(
-      `
-      INSERT INTO appointments (id, customer_id, service_type, service_date, revenue_cents, staff_member, status)
-      VALUES (@id, @customerId, @serviceType, @serviceDate, @revenueCents, @staffMember, @status)
-      `
+      `INSERT INTO messages VALUES (@id,@customer,@channel,@destination,@body,@template,@hash,@sender,@created_at,@creator,@evidence)`
     )
-    .run(input);
+    .run(row);
+  audit("message.created", row.id, "ok", row.customer);
+  return row;
 }
-
-export function resetDemoData(): void {
-  const database = getDb();
-  database.exec("DELETE FROM outreach_logs; DELETE FROM appointments; DELETE FROM customers;");
+export function messageById(id: string) {
+  const row = getDb().prepare("SELECT * FROM messages WHERE id=?").get(id) as Message | undefined;
+  if (!row) throw new Error("Unknown message ID.");
+  return row;
 }
-
-export function recordOutreach(customerId: string, channel: string, message: string, status: string): void {
-  getDb()
-    .prepare(
-      `
-      INSERT INTO outreach_logs (id, customer_id, channel, message, status, created_at)
-      VALUES (@id, @customerId, @channel, @message, @status, @createdAt)
-      `
+export type Stage = "approved" | "released" | "sent" | "cancelled";
+export function eventFor(id: string, kind: Stage) {
+  return getDb().prepare("SELECT * FROM message_events WHERE message_id=? AND kind=?").get(id, kind) as
+    | { at: string; actor: string; evidence: string }
+    | undefined;
+}
+export function addEvent(id: string, kind: Stage, evidence: string, at = new Date().toISOString()) {
+  getDb().prepare("INSERT INTO message_events VALUES (?,?,?,?,?)").run(id, kind, at, actorId(), evidence);
+}
+export function addReply(id: string, reference: string, at: string, kind: string) {
+  const db = getDb();
+  const old = db.prepare("SELECT message_id,received_at,kind FROM replies WHERE reference=?").get(reference) as
+    | { message_id: string; received_at: string; kind: string }
+    | undefined;
+  if (old) {
+    if (old.message_id !== id || old.kind !== kind || old.received_at !== at)
+      throw new Error("Reply reference already recorded with different details.");
+    return;
+  }
+  db.prepare("INSERT INTO replies VALUES (?,?,?,?,?)").run(reference, id, at, actorId(), kind);
+}
+export function messageRecord(id: string) {
+  return action("message.read", id, () => {
+    const message = messageById(id);
+    const evidence = JSON.parse(message.evidence);
+    const consentImport = getDb().prepare("SELECT * FROM imports WHERE id=?").get(evidence.profileBatch);
+    const events = getDb()
+      .prepare("SELECT kind,at,actor,evidence FROM message_events WHERE message_id=? ORDER BY rowid")
+      .all(id) as { kind: Stage; at: string; actor: string; evidence: string }[];
+    return {
+      message: { ...message, sender: JSON.parse(message.sender), evidence },
+      consentImport,
+      events: events.map((event) => ({ ...event, evidence: JSON.parse(event.evidence) })),
+      replies: getDb().prepare("SELECT * FROM replies WHERE message_id=?").all(id),
+      withdrawals: getDb()
+        .prepare("SELECT * FROM withdrawals WHERE customer=? OR email=? OR phone=? ORDER BY effective_at")
+        .all(message.customer, message.destination, message.destination)
+    };
+  });
+}
+export function countsBetween(start: string, end: string) {
+  const db = getDb();
+  const count = db.prepare("SELECT count(*) FROM message_events WHERE kind=? AND at>=? AND at<?").pluck();
+  return {
+    draftsApproved: Number(count.get("approved", start, end)),
+    messagesSent: Number(count.get("sent", start, end)),
+    replies: Number(
+      db.prepare("SELECT count(*) FROM replies WHERE received_at>=? AND received_at<?").pluck().get(start, end)
     )
-    .run({
-      id: `out_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      customerId,
-      channel,
-      message,
-      status,
-      createdAt: new Date().toISOString()
-    });
+  };
 }
-
