@@ -1,3 +1,5 @@
+> **ARCHIVED — superseded by relayops-prod**
+
 # RelayOps AI Rebooking Agent
 
 RelayOps is a Slack-native AI employee for small businesses that lose revenue when customers do not return after their last appointment.
